@@ -1,0 +1,230 @@
+# fichier de configuration des parametres du virtuose 6D Desktop n70
+#-------------------------------------------------------------------
+#-------------------------------------------------------------------
+
+
+virtuose_mod_activation_panne								1
+virtuose_mod_activation_panne_sur_vitesse					0
+virtuose_mod_activation_panne_sur_vitesse_cartesienne		1
+virtuose_mod_activation_inhibition_sur_butees_virtuose		0
+virtuose_mod_activation_recor								0
+virtuose_mod_activation_limitation_vitesse					0
+virtuose_mod_activation_butee_en_z							0
+
+virtuose_mod_seuil_vitesse_cartesienne_trans				1.6
+
+
+
+# calibration
+#-------------
+
+virtuose_es_mode_debug							0
+virtuose_es_calibration_automatique				1
+
+virtuose_phys_position_d_initialisation      		29.213		-38.5367			20.40		89.928		33.10 		84.332
+
+
+
+# Kp_V = 0.022 sur les DCX22L
+# Kp_V = 0.0031 sur les DCX16S
+
+virtuose_es_vitesse_calibration				7.0 	-12.0 	-7.0 		-20.0 	15.0 	-15.0
+virtuose_es_seuil_courant_calibration		0.13	-0.22	-0.13		-0.058	0.042	-0.042
+
+
+# paramètres moteurs 
+#-------------------
+
+# v3a rev.D
+virtuose_es_Kconv_I		0.0006357828778		0.0006357828778		0.0006357828778	\
+						0.000101725808		0.000101725808 		0.000101725808
+
+virtuose_es_Kp_P		0.0  	0.0  	0.0			0.0  	0.0  	0.0
+virtuose_es_Kd_P		0.0  	0.0  	0.0			0.0  	0.0  	0.0
+#virtuose_es_Kp_V		0.022  	0.022  	0.022		0.0031 	0.0031 	0.0031
+virtuose_es_Kp_V		0.03  	0.03  	0.03		0.0031 	0.0031 	0.0031
+virtuose_es_Kp_I		0.05 	0.05 	0.05		0.2  	0.2  	0.2
+virtuose_es_Ki_I		0.16  	0.16  	0.16 		0.5 	0.5 	0.5
+
+
+# Kt = 45.2 e-3 sur les DCX22L
+# Kt = 36.0 e-3 sur les DCX16S
+
+virtuose_phys_inv_gain_p_boucle_vit_moteur_negative		4634.0 4634.0 4634.0 56301.0 56301.0 56301.0 	
+virtuose_phys_gain_p_boucle_vit_moteur_negative			0.0002157 0.0002157 0.0002157 0.000017 0.000017 0.000017
+
+virtuose_phys_inv_gain_p_boucle_vit_moteur_positive		4634.0 4634.0 4634.0 56301.0 56301.0 56301.0 	
+virtuose_phys_gain_p_boucle_vit_moteur_positive			0.0002157 0.0002157 0.0002157 0.000017 0.000017 0.000017
+
+
+# service
+#--------
+
+virtuose_caracs_numero_service						2
+
+
+
+# commande en vitesse
+#--------------------
+
+virtuose_speed_position_centre						0.24		-0.0257		0.0		0.0		0.0		0.0		1.0
+
+# en translation
+virtuose_speed_enable_translation					0
+virtuose_speed_rapport_vitesse_en_translation		2.0	
+virtuose_speed_rayon								0.05		# m
+virtuose_speed_effort_rappel						2.0			# N
+
+
+# position physique du peripherique
+#----------------------------------
+
+virtuose_phys_H_bm_p_obs							0.0	0.0	0.0		0.0	0.0	0.0	1.0
+
+
+# butées logicielles
+#-------------------
+
+virtuose_mod_butees_logicielles						1
+
+#													axe 1	axe 2	axe 3	axe 4	axe 5	 axe 6
+#													----------------------------------------------
+virtuose_phys_butees_arti_sup 		 				0.74	-0.05	1.37	 2.25   0.79	 2.11 
+virtuose_phys_butees_arti_inf 						-0.74	-1.52	-0.09	-2.27  -0.90 	-2.15
+
+virtuose_mod_butees_arti_sup 		 				0.74	-0.05	1.37	 2.25   0.79 	2.11
+virtuose_mod_butees_arti_inf 						-0.74	-1.52	-0.09	-2.27   -0.90 	-2.15
+
+virtuose_mod_butees_plage_deceleration				0.2		0.2		0.3		0.3		0.3		0.3
+
+
+# frottements
+# -----------
+#													axe 1	axe 2	axe 3	axe 4	axe 5	axe 6
+#													----------------------------------------------
+virtuose_mod_gain_fs_arti_amplitude_vit_positive 	0.0 	0.0 	0.0     0.0 	0.0 	0.0
+virtuose_mod_gain_fs_arti_pente_vit_positive 		20.0 	20.0 	20.0 	20.0 	20.0 	20.0
+virtuose_mod_gain_fv_arti_vit_positive 				0.0 	0.0 	0.0		0.0 	0.0		0.0
+
+virtuose_mod_gain_fs_arti_amplitude_vit_negative 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0
+virtuose_mod_gain_fs_arti_pente_vit_negative 		20.0 	20.0 	20.0 	20.0 	20.0 	20.0
+virtuose_mod_gain_fv_arti_vit_negative 				0.0 	0.0 	0.0		0.0 	0.0		0.0
+
+
+# entrées sorties
+#----------------
+
+virtuose_mod_logique_inverse_homme_mort			1
+
+virtuose_es_bit_retour_puissance				0
+virtuose_es_bit_homme_mort						1
+virtuose_es_bit_bouton_pause_reprise			3
+# pour avoir le decalage sur le bouton de la poignee: virtuose_es_bit_bouton_decalage	5
+virtuose_es_bit_bouton_decalage					5
+virtuose_es_bit_bouton_arret_mode				7
+
+virtuose_es_bit_bouton_milieu		6
+virtuose_es_bit_bouton_gauche		3
+virtuose_es_bit_bouton_droit		7
+
+virtuose_es_bit_bouton_libre_1			5
+virtuose_es_bit_bouton_libre_2			3
+virtuose_es_bit_bouton_libre_3			7
+
+
+# fréquences de coupure
+#---------------------
+
+virtuose_mod_fc_vit_carte_consigne 		350.0  	350.0  	350.0  	300.0 	300.0 	300.0 	300.0
+virtuose_mod_fc_vit_moteur_brut 		100.0 	100.0 	100.0 	100.0 	100.0 	100.0
+virtuose_mod_fc_pos_arti_pince			10.0
+
+
+# gains
+#------
+
+virtuose_phys_Km\
+					4.0	0.0	0.0	0.0	0.0	0.0 \
+					0.0	4.0	0.0	0.0	0.0	0.0 \
+					0.0	0.0	4.0	0.0	0.0	0.0 \
+					0.0	0.0	0.0	1000.0	0.0	0.0 \
+					0.0	0.0	0.0	0.0	1000.0	0.0 \
+					0.0	0.0	0.0	0.0	0.0	1000.0 
+
+virtuose_phys_Bm\
+					0.015	0.0	0.0	0.0	0.0	0.0 \
+					0.0	0.015	0.0	0.0	0.0	0.0 \
+					0.0	0.0	0.015	0.0	0.0	0.0 \
+					0.0	0.0	0.0	1.7	0.0	0.0 \
+					0.0	0.0	0.0	0.0	1.7	0.0 \
+					0.0	0.0	0.0	0.0	0.0	1.7
+
+
+# version avec modification du coude (Ajout de 3 dizieme)
+#--------------------------------------------------------
+
+virtuose_phys_Ho	0.4	-0.026	0.0 	0.0	0.0	0.0	1.0
+
+virtuose_phys_Pc_w_0	0.0	0.0	1.0
+virtuose_phys_Pc_w_1	0.0	1.0	0.0
+virtuose_phys_Pc_w_2	0.0	1.0	0.0
+virtuose_phys_Pc_w_3	1.0	0.0	0.0
+virtuose_phys_Pc_w_4	0.0	1.0	0.0
+virtuose_phys_Pc_w_5	0.0	0.0	1.0
+
+virtuose_phys_Pc_r_0	0.0	0.0	0.0
+virtuose_phys_Pc_r_1	0.0	0.0	0.0
+virtuose_phys_Pc_r_2	0.2 -0.026	0.0
+virtuose_phys_Pc_r_3	0.4	-0.026	0.0
+virtuose_phys_Pc_r_4	0.4	-0.026	0.0
+virtuose_phys_Pc_r_5	0.4	-0.026	0.0
+
+virtuose_phys_Pc_h_0	0.0
+virtuose_phys_Pc_h_1	0.0
+virtuose_phys_Pc_h_2	0.0
+virtuose_phys_Pc_h_3	0.0
+virtuose_phys_Pc_h_4	0.0
+virtuose_phys_Pc_h_5	0.0
+
+
+
+# matrices de transformation 
+#---------------------------
+
+virtuose_phys_transf_vit_moteur_arti \
+0.02683157 		0	    	0				0				0				0 \
+0				0.0407611	0				0				0				0 \
+0			   -0.0407611	0.0407611		0				0				0 \
+0				0			0			0.02618623651 		0				0 \
+0				0			0				0			0.02618623651 		0 \
+0				0			0				0				0		0.02618623651
+
+
+virtuose_phys_transf_moteur_butees \
+0.02683157   		0	    	0				0				0				0 \
+0				0.0407611	0				0				0				0 \
+0			    0			0.0407611		0				0				0 \
+0				0			0			0.02618623651 		0				0 \
+0				0			0				0			0.02618623651 		0 \
+0				0			0				0				0		0.02618623651
+
+
+virtuose_phys_transf_butees_moteur \
+37.26953   		0	    	0				0				0				0 \
+0				24.53320	0				0				0				0 \
+0			    0			24.53320		0				0				0 \
+0				0			0				38.188	 		0				0 \
+0				0			0				0				38.188	 		0 \
+0				0			0				0				0			38.188
+
+
+# potentiometres
+#---------------					
+#	
+
+virtuose_es_gain_potentiometre				-6.0		0.0		0.0		0.0		0.0		0.0		0.0		0.0
+virtuose_es_offset_potentiometre			3.72		0.0		0.0		0.0		0.0		0.0		0.0		0.0
+
+
+
+

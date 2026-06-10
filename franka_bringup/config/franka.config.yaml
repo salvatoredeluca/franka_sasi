@@ -1,0 +1,50 @@
+# Configuration file for example.launch.py
+# Defines parameters for launching 0 to many Franka Robotics components in
+# namespaced or non-namespaced environments.
+#
+# Note: This is a launch configuration file, not a node parameter file (see: controllers.yaml).
+# Ensure all boolean values are quoted ("true" or "false") to avoid YAML parsing issues.
+# Ensure each robot has a unique namespace to prevent topic conflicts.
+#
+# To enable Gazebo GUI, launch with:
+#   ros2 launch franka_bringup example.launch.py gz_gui:=true
+
+ROBOT1:
+  robot_type: "fr3"
+  arm_prefix: "left"
+  fake_sensor_commands: "true"
+  joint_state_rate: 30
+  load_gripper: "true"
+  namespace: "left"
+  robot_ip: "192.168.9.11"
+  use_fake_hardware: "true"
+  gazebo: "true"                
+  use_rviz: "true"
+  use_camera: "false"
+  camera_serial_no: "213322072014"
+  base_xyz: "-0.338 -0.8 0"
+  base_rpy: "0 0 1.570796"
+  controller: "custom_controller"
+  gazebo_effort: "true"
+  franka_hand: "franka_hand"
+
+
+ROBOT2:
+  robot_type: "fr3"
+  arm_prefix: "right"
+  fake_sensor_commands: "true"
+  joint_state_rate: 30
+  load_gripper: "true"
+  namespace: "right"
+  robot_ip: "192.168.9.12"
+  use_fake_hardware: "true"
+  gazebo: "true"                
+  use_rviz: "true"
+  use_camera: "false"
+  camera_serial_no: "213322071559"
+  base_xyz: "-0.343 0.416 0"
+  base_rpy: "0 0 -1.570796"
+  controller: "custom_controller"
+  gazebo_effort: "true"
+  franka_hand: "franka_hand"
+

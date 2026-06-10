@@ -1,0 +1,274 @@
+# Unified controller configuration for Franka FR3 robots.
+# Used by both real hardware and Gazebo simulation.
+#
+# Namespace-agnostic: the /** prefix makes parameters available in any namespace.
+# See the original controllers.yaml header for namespace-specific overrides.
+
+/**:
+  controller_manager:
+    ros__parameters:
+      update_rate: 1000  # Hz
+      thread_priority: 98
+
+      # --- FR3 controllers ---
+      cartesian_elbow_example_controller:
+        type: franka_example_controllers/CartesianElbowExampleController
+
+      cartesian_orientation_example_controller:
+        type: franka_example_controllers/CartesianOrientationExampleController
+
+      cartesian_pose_elbow_example_controller:
+        type: franka_example_controllers/CartesianElbowExampleController
+
+      cartesian_pose_example_controller:
+        type: franka_example_controllers/CartesianPoseExampleController
+
+      cartesian_velocity_example_controller:
+        type: franka_example_controllers/CartesianVelocityExampleController
+
+      elbow_example_controller:
+        type: franka_example_controllers/ElbowExampleController
+
+      gravity_compensation_example_controller:
+        type: franka_example_controllers/GravityCompensationExampleController
+
+      gripper_example_controller:
+        type: franka_example_controllers/GripperExampleController
+
+      joint_impedance_example_controller:
+        type: franka_example_controllers/JointImpedanceExampleController
+
+      joint_impedance_with_ik_example_controller:
+        type: franka_example_controllers/JointImpedanceWithIKExampleController
+
+      joint_position_example_controller:
+        type: franka_example_controllers/JointPositionExampleController
+
+      joint_velocity_example_controller:
+        type: franka_example_controllers/JointVelocityExampleController
+
+      model_example_controller:
+        type: franka_example_controllers/ModelExampleController
+
+      move_to_start_example_controller:
+        type: franka_example_controllers/MoveToStartExampleController
+
+      custom_controller:
+        type: franka_example_controllers/CustomController
+
+      # --- Broadcasters ---
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+
+      franka_robot_state_broadcaster:
+        type: franka_robot_state_broadcaster/FrankaRobotStateBroadcaster
+        state_interfaces:
+          robot_state
+
+      # --- Standard controllers ---
+      joint_group_position_controller:
+        type: position_controllers/JointGroupPositionController
+      joint_group_velocity_controller:
+        type: velocity_controllers/JointGroupVelocityController
+      effort_controller:
+        type: effort_controllers/JointGroupEffortController
+     
+
+      # --- Mobile controllers ---
+      mobile_cartesian_velocity_example_controller:
+        type: franka_example_controllers/MobileCartesianVelocityExampleController
+
+      mobile_cartesian_velocity_with_ik_example_controller:
+        type: franka_example_controllers/MobileCartesianVelocityWithIkExampleController
+
+      mobile_fr3_duo_joint_impedance_example_controller:
+        type: franka_example_controllers/MobileFr3DuoJointImpedanceExampleController
+
+
+# ---------------------------------------------------------------------------
+# Controller parameters
+# ---------------------------------------------------------------------------
+
+/**:
+  franka_robot_state_broadcaster:
+    ros__parameters:
+      lock_try_count: 5
+      lock_sleep_interval: 5
+      lock_log_error: true
+      lock_update_success: false
+
+/**:
+  joint_impedance_example_controller:
+    ros__parameters:
+      k_gains:
+        - 240.0
+        - 240.0
+        - 240.0
+        - 240.0
+        - 100.0
+        - 60.0
+        - 20.0
+      d_gains:
+        - 20.0
+        - 20.0
+        - 20.0
+        - 10.0
+        - 10.0
+        - 10.0
+        - 5.0
+
+/**:
+  joint_impedance_with_ik_example_controller:
+    ros__parameters:
+      k_gains:
+        - 600.0
+        - 600.0
+        - 600.0
+        - 600.0
+        - 250.0
+        - 150.0
+        - 50.0
+      d_gains:
+        - 30.0
+        - 30.0
+        - 30.0
+        - 30.0
+        - 10.0
+        - 10.0
+        - 5.0
+
+/**:
+  move_to_start_example_controller:
+    ros__parameters:
+      k_gains:
+        - 600.0
+        - 600.0
+        - 600.0
+        - 600.0
+        - 250.0
+        - 150.0
+        - 50.0
+      d_gains:
+        - 30.0
+        - 30.0
+        - 30.0
+        - 30.0
+        - 10.0
+        - 10.0
+        - 5.0
+
+/**:
+  custom_controller:
+    ros__parameters:
+      k_gains:
+        - 1500.0
+        - 1500.0
+        - 500.0
+        - 1000.0
+        - 1000.0
+        - 1000.0
+      d_gains:
+        - 32.0
+        - 32.0
+        - 32.0
+        - 45.0
+        - 45.0
+        - 45.0
+      d_null_gains:
+        - 5.0
+        - 5.0
+        - 5.0
+        - 5.0
+        - 5.0
+        - 5.0
+        - 5.0
+      null_stiffness_gain: 0.0
+      null_sigma_gain: 1.0
+      null_joint_limit_gain: 20.0
+      grasp_width: 0.0
+      grasp_speed: 0.1
+      grasp_force: 40.0
+      grasp_epsilon_inner: 0.005
+      grasp_epsilon_outer: 0.08
+      open_width: 0.08
+      open_speed: 0.1
+      twist_timeout: 0.5
+      sigma_min_threshold: 0.08 #Jacobian minimum singolar value threshold under which regularize Jacobian pseudoinverse and activate repulsive force from singularities in task spacerepul
+      sigma_min_critical: 0.04 #Jacobian minimum singolar value threshold under which the command twist is blocked
+      lambda_max: 0.2
+      manip_task_gain: 5.0
+      manip_task_max_accel: 50.0
+      lower_torque_thresholds_accel:    [30.0, 30.0, 30.0, 25.0, 25.0, 25.0, 20.0]
+      upper_torque_thresholds_accel:    [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 40.0]
+      lower_torque_thresholds_nominal:  [30.0, 30.0, 30.0, 25.0, 25.0, 25.0, 20.0]
+      upper_torque_thresholds_nominal:  [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 40.0]
+      lower_force_thresholds_accel:     [20.0, 20.0, 20.0, 25.0, 25.0, 25.0]
+      upper_force_thresholds_accel:     [50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+      lower_force_thresholds_nominal:   [20.0, 20.0, 20.0, 25.0, 25.0, 25.0]
+      upper_force_thresholds_nominal:   [50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+
+/**:
+  mobile_cartesian_velocity_with_ik_example_controller:
+    ros__parameters:
+      robot_type: "tmrv0_2"
+
+
+
+
+# /left:
+#   effort_controller:
+#     ros__parameters:
+#       joints:
+#         - left_fr3_joint1
+#         - left_fr3_joint2
+#         - left_fr3_joint3
+#         - left_fr3_joint4
+#         - left_fr3_joint5
+#         - left_fr3_joint6
+#         - left_fr3_joint7
+#       command_interfaces:
+#         - effort
+#       state_interfaces:
+#         - position
+#         - velocity
+#       # gains:
+#       #   left_fr3_joint1: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   left_fr3_joint2: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   left_fr3_joint3: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   left_fr3_joint4: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   left_fr3_joint5: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   left_fr3_joint6: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   left_fr3_joint7: {p: 1000.0, i: 10.0, d: 50.0}
+
+      
+
+
+# /right:
+#   effort_controller:
+#     ros__parameters:
+#       joints:
+#         - right_fr3_joint1
+#         - right_fr3_joint2
+#         - right_fr3_joint3
+#         - right_fr3_joint4
+#         - right_fr3_joint5
+#         - right_fr3_joint6
+#         - right_fr3_joint7
+#       command_interfaces:
+#         - effort
+#       state_interfaces:
+#         - position
+#         - velocity
+#       # gains:
+#       #   right_fr3_joint1: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   right_fr3_joint2: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   right_fr3_joint3: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   right_fr3_joint4: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   right_fr3_joint5: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   right_fr3_joint6: {p: 1000.0, i: 10.0, d: 50.0}
+#       #   right_fr3_joint7: {p: 1000.0, i: 10.0, d: 50.0}
+    
+      
+
+
+

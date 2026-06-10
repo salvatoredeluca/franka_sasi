@@ -1,0 +1,123 @@
+{
+    "codebase_version": "v2.1",
+    "robot_type": null,
+    "total_episodes": 0,
+    "total_frames": 0,
+    "total_tasks": 0,
+    "total_videos": 0,
+    "total_chunks": 0,
+    "chunks_size": 1000,
+    "fps": 30,
+    "splits": {},
+    "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
+    "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
+    "features": {
+        "observation.state": {
+            "dtype": "float32",
+            "shape": [
+                16
+            ],
+            "names": [
+                "left_x",
+                "left_y",
+                "left_z",
+                "left_qx",
+                "left_qy",
+                "left_qz",
+                "left_qw",
+                "left_gripper_state",
+                "right_x",
+                "right_y",
+                "right_z",
+                "right_qx",
+                "right_qy",
+                "right_qz",
+                "right_qw",
+                "right_gripper_state"
+            ]
+        },
+        "action": {
+            "dtype": "float32",
+            "shape": [
+                14
+            ],
+            "names": [
+                "left_dx",
+                "left_dy",
+                "left_dz",
+                "left_dwx",
+                "left_dwy",
+                "left_dwz",
+                "left_gripper_cmd",
+                "right_dx",
+                "right_dy",
+                "right_dz",
+                "right_dwx",
+                "right_dwy",
+                "right_dwz",
+                "right_gripper_cmd"
+            ]
+        },
+        "observation.images.camera_left": {
+            "dtype": "video",
+            "shape": [
+                3,
+                224,
+                224
+            ],
+            "names": [
+                "channel",
+                "height",
+                "width"
+            ]
+        },
+        "observation.images.camera_right": {
+            "dtype": "video",
+            "shape": [
+                3,
+                224,
+                224
+            ],
+            "names": [
+                "channel",
+                "height",
+                "width"
+            ]
+        },
+        "timestamp": {
+            "dtype": "float32",
+            "shape": [
+                1
+            ],
+            "names": null
+        },
+        "frame_index": {
+            "dtype": "int64",
+            "shape": [
+                1
+            ],
+            "names": null
+        },
+        "episode_index": {
+            "dtype": "int64",
+            "shape": [
+                1
+            ],
+            "names": null
+        },
+        "index": {
+            "dtype": "int64",
+            "shape": [
+                1
+            ],
+            "names": null
+        },
+        "task_index": {
+            "dtype": "int64",
+            "shape": [
+                1
+            ],
+            "names": null
+        }
+    }
+}
