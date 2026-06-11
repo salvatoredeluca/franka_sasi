@@ -157,23 +157,58 @@
 
     <link name="${prefix}link8"/>
 
+    <xacro:if value="${gazebo}">
 
-     <joint name="${prefix}camera_joint" type="fixed">
+
+        <joint name="${prefix}link8_aligned_joint" type="fixed">
         <parent link="${prefix}link8"/>
+        <child link="${prefix}link8_aligned"/>
+        <origin xyz="0 0 0" rpy="0 0 ${-pi/4}"/>
+      </joint>
+
+  <link name="${prefix}link8_aligned"/>
+
+    <joint name="${prefix}camera_joint" type="fixed">
+        <parent link="${prefix}link8_aligned"/>
         <child link="${prefix}camera_link"/>
-        <origin xyz="0 0 0.05" rpy="${pi/2} ${-pi/2} ${pi/4}"/>
+        <origin xyz="0.1 0.0 0.05" rpy="0 ${-pi/2+pi/4} ${-pi}"/>
     </joint>
 
-    <link name="${prefix}camera_link"/>
-     
-       
-  <link name="${prefix}camera_link_optical" />
-  <joint name="${prefix}camera_optical_joint" type="fixed">
-    <origin xyz="0.0 0 0" rpy="${-pi/2} 0 ${-pi/2}" />
-    <parent link="${prefix}camera_link"/> 
-    <child link="${prefix}camera_link_optical"/>
-  </joint>
-  
+      <!-- <joint name="${prefix}camera_joint" type="fixed">
+          <parent link="${prefix}link8"/>
+          <child link="${prefix}camera_link"/>
+          <origin xyz="0 0.1 0" rpy="${pi/2} ${-pi/2} ${pi/4}"/>
+      </joint> -->
+<!-- 
+      <joint name="${prefix}camera_joint" type="fixed">
+        <parent link="${prefix}link8"/>
+        <child link="${prefix}camera_link"/>
+        <origin xyz="0.162000 -0.000000 -0.007000"
+                rpy="0.000000 -0.785398 3.141593"/>
+       </joint> -->
+
+<!-- 
+      <joint name="${prefix}camera_joint" type="fixed">
+        <parent link="${prefix}link8"/>
+        <child link="${prefix}camera_link"/>
+        <origin xyz="0.1 -0.1 0"
+                rpy="0 ${-pi/4-pi/6} ${pi}"/>
+       </joint> -->
+
+
+
+      
+
+      <link name="${prefix}camera_link"/>
+         
+      <link name="${prefix}camera_link_optical" />
+      <joint name="${prefix}camera_optical_joint" type="fixed">
+        <origin xyz="0.0 0 0" rpy="${-pi/2} 0 ${-pi/2}" />
+        <parent link="${prefix}camera_link"/> 
+        <child link="${prefix}camera_link_optical"/>
+      </joint>
+    
+    </xacro:if>
 
 
 

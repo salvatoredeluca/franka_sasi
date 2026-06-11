@@ -282,6 +282,21 @@ def generate_robot_nodes(context):
                 '--child-frame-id', 'box'
             ]
         ))
+
+        nodes.append(Node(
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                arguments=[
+                    '/right_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image',
+                    '/right_camera/depth_image@sensor_msgs/msg/Image[ignition.msgs.Image',
+                    '/right_camera/camera_info@sensor_msgs/msg/CameraInfo[ignition.msgs.CameraInfo',
+
+                     '/left_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image',
+                    '/left_camera/depth_image@sensor_msgs/msg/Image[ignition.msgs.Image',
+                    '/left_camera/camera_info@sensor_msgs/msg/CameraInfo[ignition.msgs.CameraInfo',
+                ],
+                output='screen',
+            ))
         # nodes.append(RegisterEventHandler(OnShutdown(on_shutdown=[
         #     ExecuteProcess(cmd=['pkill', '-SIGINT', '-f', 'gz sim'],
         #                    name='gz_sim_graceful_shutdown'),
@@ -430,25 +445,17 @@ def generate_robot_nodes(context):
             package='rviz2', executable='rviz2', name='rviz2',
             arguments=['--display-config', rviz_tmp.name], output='screen',
         ))
-    nodes.append(Node(
-            package='ros_gz_bridge',
-            executable='parameter_bridge',
-            arguments=[
-                '/right_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image',
-                '/right_camera/depth_image@sensor_msgs/msg/Image[ignition.msgs.Image',
-                '/right_camera/camera_info@sensor_msgs/msg/CameraInfo[ignition.msgs.CameraInfo',
-            ],
-            output='screen',
-        ))
-    nodes.append(Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            arguments=['--x', '-0.338', '--y', '-0.453', '--z', '0',
-                    '--roll', '0', '--pitch', '0', '--yaw', '1.570796',
-                    '--frame-id', 'world',
-                    '--child-frame-id', 'left_fr3_link0'],
-            output='screen',
-        ))
+    
+        nodes.append(Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                arguments=['--x', '-0.338', '--y', '-0.453', '--z', '0',
+                        '--roll', '0', '--pitch', '0', '--yaw', '1.570796',
+                        '--frame-id', 'world',
+                        '--child-frame-id', 'left_fr3_link0'],
+                output='screen',
+            ))
+        
     nodes.append(Node(
             package='tf2_ros',
             executable='static_transform_publisher',

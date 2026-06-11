@@ -22,7 +22,7 @@ ROBOT1:
   use_rviz: "true"
   use_camera: "false"
   camera_serial_no: "213322072014"
-  base_xyz: "-0.338 -0.8 0"
+  base_xyz: "-0.338 -0.416 0"
   base_rpy: "0 0 1.570796"
   controller: "custom_controller"
   gazebo_effort: "true"

@@ -12,6 +12,11 @@
 #include <visp3/core/vpCameraParameters.h>
 #include <visp3/mbt/vpMbEdgeTracker.h>
 #include <visp3/core/vpException.h>
+#include <visp3/sensor/vpRealSense2.h>
+
+
+
+
 
 
 #include "tf2/exceptions.h"
@@ -33,17 +38,17 @@ class EdgesDetectionNode : public rclcpp::Node
 
 
         rgb_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/right_camera/image", 10,
+        "/right_camera/image", 5,
         std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));
 
         
         depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/right_camera/depth_image", 10,
+        "/right_camera/depth_image", 5,
         std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));
 
         
         info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-        "/right_camera/camera_info", 10,
+        "/right_camera/camera_info", 5,
         std::bind(&EdgesDetectionNode::camera_info_callback, this, std::placeholders::_1));
 
     
@@ -53,7 +58,7 @@ class EdgesDetectionNode : public rclcpp::Node
 
         
         timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(10),
+        std::chrono::milliseconds(33),
         std::bind(&EdgesDetectionNode::on_timer, this));     
         
         
@@ -111,13 +116,23 @@ class EdgesDetectionNode : public rclcpp::Node
         tracker_.setAngleAppear(visp::vpMath::rad(86)); //Da tenere altini per massimizzare la probabilità di vedere facce
         tracker_.setAngleDisappear(visp::vpMath::rad(89));
         tracker_.setNearClippingDistance(0.1);
-        tracker_.setFarClippingDistance(2000.0);
+        tracker_.setFarClippingDistance(100.0);
         tracker_.setClipping(tracker_.getClipping() | visp::vpMbtPolygon::FOV_CLIPPING);
+
+        // visp::vpKltOpencv klt_settings;
+        // klt_settings.setMaxFeatures(300);
+        // klt_settings.setWindowSize(5);
+        // klt_settings.setQuality(0.015);
+        // klt_settings.setMinDistance(8);
+        // klt_settings.setHarrisFreeParameter(0.01);
+        // klt_settings.setBlockSize(3);
+        // klt_settings.setPyramidLevels(3);
+        // tracker_.setKltOpencv(klt_settings);
 
         visp::vpMe me;
         me.setMaskSize(3);
         me.setMaskNumber(180);
-        me.setRange(8); //quanto
+        me.setRange(20); //quanto
         me.setThreshold(2000); //Modulo del gradiente
         me.setMu1(0.5); me.setMu2(0.5);
         me.setSampleStep(2);
@@ -142,9 +157,9 @@ class EdgesDetectionNode : public rclcpp::Node
         
 
         try {
+             tracker_.track(I_);  
             tracker_.getPose(cMo_);
-            tracker_.track(I_);  
-            
+                    
         } catch (const visp::vpException & e) {
             RCLCPP_WARN(this->get_logger(), "Tracking perso: %s", e.what());
             tracker_initialized_ = false;

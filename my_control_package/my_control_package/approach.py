@@ -30,6 +30,14 @@ class CollisionTaskNode(Node):
         self.left_data = self.left_model.createData() 
         ee_frame_name_left = 'left_fr3_camera_link'
         self.left_frame_id = self.left_model.getFrameId(ee_frame_name_left)
+        
+        # --- Nuovo frame per il target di distanza del braccio destro ---
+        target_frame_name_left = 'left_fr3_hand_tcp'
+        if self.left_model.existFrame(target_frame_name_left):
+            self.left_target_frame_id = self.left_model.getFrameId(target_frame_name_left)
+        else:
+            self.get_logger().warn(f"Frame {target_frame_name_left} not found, falling back to {ee_frame_name_left}")
+            self.left_target_frame_id = self.left_frame_id
 
         self.left_collision_model = pin.buildGeomFromUrdfString(
             self.left_model, 
@@ -53,30 +61,7 @@ class CollisionTaskNode(Node):
         )
         self.right_collision_data = self.right_collision_model.createData()
 
-        # ── LOG 1: geometrie caricate dall'URDF ──────────────────────────────────
-        self.get_logger().info("=== LEFT collision geometries ===")
-        for g in self.left_collision_model.geometryObjects:
-            t = g.placement.translation
-            try:
-                r = g.geometry.radius
-            except Exception:
-                r = -1.0
-            self.get_logger().info(
-                f"  {g.name:40s}  parentJoint={g.parentJoint}"
-                f"  placement={t}  radius={r:.4f}"
-            )
-
-        self.get_logger().info("=== RIGHT collision geometries ===")
-        for g in self.right_collision_model.geometryObjects:
-            t = g.placement.translation
-            try:
-                r = g.geometry.radius
-            except Exception:
-                r = -1.0
-            self.get_logger().info(
-                f"  {g.name:40s}  parentJoint={g.parentJoint}"
-                f"  placement={t}  radius={r:.4f}"
-            )
+      
 
         self.add_sphere_frames(self.left_model, self.left_collision_model)
         self.add_sphere_frames(self.right_model,  self.right_collision_model)
@@ -88,31 +73,7 @@ class CollisionTaskNode(Node):
         pin.forwardKinematics(self.left_model, self.left_data, q0_left)
         pin.forwardKinematics(self.right_model,  self.right_data,  q0_right)
 
-        self.get_logger().info("=== LEFT geom world poses @ neutral config ===")
-        for g in self.left_collision_model.geometryObjects:
-            joint_pose = self.left_data.oMi[g.parentJoint]
-            t_local    = g.placement.translation
-            p_world    = joint_pose.rotation @ t_local + joint_pose.translation
-            try:
-                r = g.geometry.radius
-            except Exception:
-                r = -1.0
-            self.get_logger().info(
-                f"  {g.name:40s}  world_pos={np.round(p_world,4)}  radius={r:.4f}"
-            )
-
-        self.get_logger().info("=== RIGHT geom world poses @ neutral config ===")
-        for g in self.right_collision_model.geometryObjects:
-            joint_pose = self.right_data.oMi[g.parentJoint]
-            t_local    = g.placement.translation
-            p_world    = joint_pose.rotation @ t_local + joint_pose.translation
-            try:
-                r = g.geometry.radius
-            except Exception:
-                r = -1.0
-            self.get_logger().info(
-                f"  {g.name:40s}  world_pos={np.round(p_world,4)}  radius={r:.4f}"
-            )
+      
 
         self.setupCasadi()
 
@@ -424,6 +385,7 @@ class CollisionTaskNode(Node):
             left_twist_command = np.zeros(6)
         else:
             left_twist_command = -Rwc_augmented @ np.linalg.pinv(L) @ e
+            
         LJl     = L @ Rwc_augmented @ J_left
         LJl_dag = np.linalg.pinv(LJl)
 
@@ -437,19 +399,41 @@ class CollisionTaskNode(Node):
         )
 
         ql_nullspace = ((np.eye(7, dtype=np.int_) - LJl_dag @ LJl) @ DH_num).flatten()
-        # Stessa identica formula originaria applicata a J_left e left_twist_command
-        ql_dot_des   = 2.0* np.linalg.pinv(J_left) @ left_twist_command-0.15*ql_nullspace
+        ql_dot_des   = 2.0* np.linalg.pinv(J_left) @ left_twist_command - 0.15*ql_nullspace
 
         
+        # ─── LOGICA PER IL BRACCIO DESTRO (Approccio al TCP sinistro) ───────────
+        # Estrai la posizione del tcp sinistro nel mondo
+        p_left_target_world = self.left_data.oMf[self.left_target_frame_id].translation
+        # Estrai la posizione del tcp/tool destro nel mondo
+        p_right_world = self.right_data.oMf[self.right_frame_id].translation
+        
+        # Vettore che va dal braccio destro al TCP del braccio sinistro
+        direction = p_left_target_world - p_right_world
+        dist = np.linalg.norm(direction)
+
         t = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
+        
+        target_dist = 0.80+0.26*math.sin(2*t) # Mantenersi a 40 cm di distanza
+        Kp_pos = 0.1     # Guadagno proporzionale per la velocità lineare
+        
+        if dist > 1e-4:
+            dir_norm = direction / dist
+            v_linear = Kp_pos * (dist - target_dist) * dir_norm
+        else:
+            v_linear = np.zeros(3)
+
+        # Crea il comando di twist spaziale per il braccio destro
         right_twist_command = np.array([
-            0.0 * math.cos(t),
-            0.1 * math.sin(t), 
-            0.0 * math.cos(t),
-            0.0,
-            0.0,
-            0.0
+            v_linear[0],
+            v_linear[1], 
+            v_linear[2],
+            0.0,  
+            0.0,  
+            0.0   
         ])
+        # ─── FINE NUOVA LOGICA ───────────────────────────────────────────────────
+
         qr_dot_des = np.linalg.pinv(J_right) @ right_twist_command
 
         # Concatena mettendo la left per prima, coerenza con CasADi qL, qR

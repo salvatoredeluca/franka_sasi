@@ -66,9 +66,9 @@
     </model>
 
 
-
+<!-- 
     <model name="box">
-    <pose>-0.36 -0.27 0.57 0.0 0.0 0.0</pose>
+    <pose>0.02 0.12 0.1 0.0 0.0 0.0</pose>
       <static>true</static>
       <link name="box">
       
@@ -83,7 +83,7 @@
         <visual name="visual">
           <geometry>
             <box>
-              <size>0.04 0.04 0.15</size> 
+              <size>0.08 0.08 0.35</size> 
             </box>
           </geometry>
           <material>
@@ -96,14 +96,14 @@
         <collision name="collision">
           <geometry>
             <box>
-              <size>0.04 0.04 0.15</size>
+              <size>0.08 0.08 0.4</size>
             </box>
           </geometry>
         </collision>
       </link>
     </model>
 
-
+ -->
 
   </world>
 </sdf>

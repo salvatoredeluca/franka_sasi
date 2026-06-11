@@ -30,7 +30,8 @@ setup(
              'opti_ex = my_control_package.opti_ex:main',
              'OcclusionTask = my_control_package.OcclusionTask:main',
              'CollisionsTask1 = my_control_package.CollisionsTask1:main',
-             'EdgesDetection = my_control_package.EdgesDetection:main'
+             'EdgesDetection = my_control_package.EdgesDetection:main',
+             'approach = my_control_package.approach:main'
 
         ],
     },
