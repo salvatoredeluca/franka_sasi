@@ -272,9 +272,9 @@ def generate_robot_nodes(context):
             executable='static_transform_publisher',
             name='static_object_tf_publisher',
             arguments=[
-                '--x', '-0.36',
-                '--y', '-0.27',
-                '--z', '0.57',
+                '--x', '0.09',
+                '--y', '0.14',
+                '--z', '0.19',
                 '--yaw', '0.0',
                 '--pitch', '0.0',
                 '--roll', '0.0',
@@ -297,6 +297,26 @@ def generate_robot_nodes(context):
                 ],
                 output='screen',
             ))
+        
+        nodes.append( Node(
+            package='aruco_ros',
+            executable='single',
+            name='aruco_single',
+            parameters=[{
+                'image_is_rectified': True,
+                'marker_size': 0.08,            
+                'marker_id': 11,                
+                'reference_frame': 'left_fr3_camera_link', 
+                'camera_frame': 'left_fr3_camera_link_optical',    
+                'marker_frame': 'aruco11_frame' 
+            }],
+            remappings=[
+                # Colleghiamo i topic standard di ArUco ai topic della tua telecamera
+                ('/image', '/left_camera/image'),
+                ('/camera_info', '/left_camera/camera_info')
+            ]
+        )
+        )
         # nodes.append(RegisterEventHandler(OnShutdown(on_shutdown=[
         #     ExecuteProcess(cmd=['pkill', '-SIGINT', '-f', 'gz sim'],
         #                    name='gz_sim_graceful_shutdown'),

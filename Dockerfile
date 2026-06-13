@@ -105,6 +105,8 @@ RUN sudo apt-get update \
         ros-humble-teleop-twist-joy \
         ros-humble-velocity-controllers \
         ros-humble-ros2-controllers \
+        ros-humble-aruco \
+        ros-humble-aruco-ros \
     && sudo apt-get clean \
     && sudo rm -rf /var/lib/apt/lists/*
 

@@ -2,6 +2,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <franka_msgs/msg/line.hpp>
 #include <franka_msgs/msg/edges.hpp>
 
 // ViSP
@@ -14,9 +15,10 @@
 #include <visp3/core/vpException.h>
 #include <visp3/sensor/vpRealSense2.h>
 
+#include <visp3/mbt/vpMbtPolygon.h>
+#include <visp3/mbt/vpMbtDistanceLine.h>
 
-
-
+#include <visp3/core/vpPoint.h>
 
 
 #include "tf2/exceptions.h"
@@ -38,17 +40,17 @@ class EdgesDetectionNode : public rclcpp::Node
 
 
         rgb_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/right_camera/image", 5,
+        "/left_camera/image", 5,
         std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));
 
         
         depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/right_camera/depth_image", 5,
+        "/left_camera/depth_image", 5,
         std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));
 
         
         info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-        "/right_camera/camera_info", 5,
+        "/left_camera/camera_info", 5,
         std::bind(&EdgesDetectionNode::camera_info_callback, this, std::placeholders::_1));
 
     
@@ -113,8 +115,8 @@ class EdgesDetectionNode : public rclcpp::Node
         tracker_.setCameraParameters(cam_);
         
         
-        tracker_.setAngleAppear(visp::vpMath::rad(86)); //Da tenere altini per massimizzare la probabilità di vedere facce
-        tracker_.setAngleDisappear(visp::vpMath::rad(89));
+        tracker_.setAngleAppear(visp::vpMath::rad(88)); //Da tenere altini per massimizzare la probabilità di vedere facce
+        tracker_.setAngleDisappear(visp::vpMath::rad(90));
         tracker_.setNearClippingDistance(0.1);
         tracker_.setFarClippingDistance(100.0);
         tracker_.setClipping(tracker_.getClipping() | visp::vpMbtPolygon::FOV_CLIPPING);
@@ -132,10 +134,10 @@ class EdgesDetectionNode : public rclcpp::Node
         visp::vpMe me;
         me.setMaskSize(3);
         me.setMaskNumber(180);
-        me.setRange(20); //quanto
-        me.setThreshold(2000); //Modulo del gradiente
+        me.setRange(30); //
+        me.setThreshold(2000); //Non troppo alto
         me.setMu1(0.5); me.setMu2(0.5);
-        me.setSampleStep(2);
+        me.setSampleStep(5); //Importante tenerlo altino eh!
         me.setNbTotalSample(250);
         tracker_.setMovingEdge(me);
 
@@ -144,6 +146,7 @@ class EdgesDetectionNode : public rclcpp::Node
 
     void on_timer()
     {
+        franka_msgs::msg::Edges edges_msg;
         //Aspetto che la camera sia pronta e l'immagine ricevuta
         if (!camera_ready_ || !is_image_) {
           
@@ -157,38 +160,79 @@ class EdgesDetectionNode : public rclcpp::Node
         
 
         try {
-             tracker_.track(I_);  
+            tracker_.track(I_);  
             tracker_.getPose(cMo_);
-                    
+            std::list<visp::vpMbtDistanceLine*> lines; //lista delle linee delle facce
+
+            tracker_.getLline(lines, 0);  //inizializzo la lista di linee
+
+            edges_msg.lines.clear();
+            
+            
+            edges_msg.header.stamp = this->now();
+            edges_msg.header.frame_id = "left_fr3_camera_link_optical";
+            
+            
+            
+
+            //Scorro per tutte le linee e prendo il poligono(la faccia) associato alla linea k
+            for (visp::vpMbtDistanceLine* line : lines) {
+                if (!line) continue;
+
+                visp::vpMbtPolygon polygon = line->getPolygon();
+                
+                
+                // if (!polygon.isVisible()) continue;
+                
+               
+                if (!line->isVisible()) continue;
+
+               
+                franka_msgs::msg::Line single_line;
+
+                // Popolo il punto di inizio
+                single_line.point_a.x = line->p1->get_X();
+                single_line.point_a.y = line->p1->get_Y();
+                single_line.point_a.z = line->p1->get_Z();
+
+                // Popolo il punto di fine
+                single_line.point_b.x = line->p2->get_X();
+                single_line.point_b.y = line->p2->get_Y();
+                single_line.point_b.z = line->p2->get_Z();
+
+                // Inserisco la singola linea nell'array dinamico del messaggio principale
+                edges_msg.lines.push_back(single_line);
+            }
+
+            if (!edges_msg.lines.empty()) {
+                edges_pub_->publish(edges_msg);
+            }
+
+            
+                         
         } catch (const visp::vpException & e) {
             RCLCPP_WARN(this->get_logger(), "Tracking perso: %s", e.what());
             tracker_initialized_ = false;
             return;
         }
        
-      
+        //Blocco che serve solo per visualizzare sul display il tracking e pubblicare su un topic
         if (display_) {
-            // Prepara il frame per il disegno
-            visp::vpDisplay::display(I_color_);
             
-            // Disegna il modello (linee rosse) e il frame XYZ
+            visp::vpDisplay::display(I_color_);           
             tracker_.display(I_color_, cMo_, cam_, visp::vpColor::red, 2);
-            visp::vpDisplay::displayFrame(I_color_, cMo_, cam_, 0.025, visp::vpColor::none, 3);
-            
-            // Forza ViSP a renderizzare il buffer
-            visp::vpDisplay::flush(I_color_);
-            
-            // 3. SOVRASCRIVI I PIXEL DI I_color_ CON IL DISEGNO
+            visp::vpDisplay::displayFrame(I_color_, cMo_, cam_, 0.025, visp::vpColor::none, 3);       
+            visp::vpDisplay::flush(I_color_);           
             visp::vpDisplay::getImage(I_color_, I_color_);
         }
-
-        // 4. CONVERSIONE E PUBBLICAZIONE ROS 2
+        
         cv::Mat debug_mat;
         visp::vpImageConvert::convert(I_color_, debug_mat);
 
         auto debug_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", debug_mat).toImageMsg();
         debug_msg->header.stamp = this->now();
         debug_image_pub_->publish(*debug_msg);
+        //////////////////////////////////////////////////////////////////////////
 
     }
 
@@ -199,7 +243,7 @@ class EdgesDetectionNode : public rclcpp::Node
             
             //Necessito di una trasformazione da camera link optical a box come stima inziiale
             //da dare al traker
-            auto Tco = tf_buffer_->lookupTransform("right_fr3_camera_link_optical", "box", tf2::TimePointZero);
+            auto Tco = tf_buffer_->lookupTransform("left_fr3_camera_link_optical", "box", tf2::TimePointZero);
             
             visp::vpTranslationVector transl_vec{
                 Tco.transform.translation.x, Tco.transform.translation.y, Tco.transform.translation.z};

@@ -12,7 +12,7 @@ find_package(ament_cmake REQUIRED)
 # Install project launch files
 install(
   DIRECTORY
-    worlds urdf test
+     worlds urdf test
   DESTINATION share/${PROJECT_NAME}
 )
 

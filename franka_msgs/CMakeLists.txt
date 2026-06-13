@@ -24,6 +24,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/FrankaRobotState.msg"
   "msg/GraspEpsilon.msg"
   "msg/TargetStatus.msg"
+  "msg/Line.msg"
   "msg/Edges.msg"
 
   "srv/SetCartesianStiffness.srv"
