@@ -306,7 +306,7 @@ def generate_robot_nodes(context):
                 'image_is_rectified': True,
                 'marker_size': 0.08,            
                 'marker_id': 11,                
-                'reference_frame': 'left_fr3_camera_link', 
+                'reference_frame': 'left_fr3_camera_link_optical', 
                 'camera_frame': 'left_fr3_camera_link_optical',    
                 'marker_frame': 'aruco11_frame' 
             }],

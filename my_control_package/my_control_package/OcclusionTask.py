@@ -55,42 +55,14 @@ class CollisionTaskNode(Node):
         )
         self.right_collision_data = self.right_collision_model.createData()
 
-        # # ── LOG 1: geometrie caricate dall'URDF ──────────────────────────────────
-        # self.get_logger().info("=== LEFT collision geometries ===")
-        # for g in self.left_collision_model.geometryObjects:
-        #     t = g.placement.translation
-        #     try:
-        #         r = g.geometry.radius
-        #     except Exception:
-        #         r = -1.0
-        #     self.get_logger().info(
-        #         f"  {g.name:40s}  parentJoint={g.parentJoint}"
-        #         f"  placement={t}  radius={r:.4f}"
-        #     )
-
-        # self.get_logger().info("=== RIGHT collision geometries ===")
-        # for g in self.right_collision_model.geometryObjects:
-        #     t = g.placement.translation
-        #     try:
-        #         r = g.geometry.radius
-        #     except Exception:
-        #         r = -1.0
-        #     self.get_logger().info(
-        #         f"  {g.name:40s}  parentJoint={g.parentJoint}"
-        #         f"  placement={t}  radius={r:.4f}"
-        #     )
-
         self.add_sphere_frames(self.left_model, self.left_collision_model)
         self.add_sphere_frames(self.right_model,  self.right_collision_model)
 
-        # ── LOG 2: pose delle geometrie a configurazione neutra ──────────────────
         q0_left = pin.neutral(self.left_model)
         q0_right  = pin.neutral(self.right_model)
 
         pin.forwardKinematics(self.left_model, self.left_data, q0_left)
         pin.forwardKinematics(self.right_model,  self.right_data,  q0_right)
-
-        
 
         self.setupCasadi()
 
@@ -121,16 +93,17 @@ class CollisionTaskNode(Node):
         self.left_publisher = self.create_publisher(Twist, 'left/ee_twist_command', 1)
         self.right_publisher  = self.create_publisher(Twist, 'right/ee_twist_command',  1)
 
-
-        self.current_edges = [] # Inizializziamo l'array vuoto
+        self.current_edges = [] 
         self.subscription_edges = self.create_subscription(
             Edges, '/edges', self.edges_callback, 10)
 
         self.start_time = self.get_clock().now()
-        self.timer = self.create_timer(0.2, self.on_timer)
+        self.timer = self.create_timer(0.01, self.on_timer)
 
     def edges_callback(self, msg):
-        
+        # MODIFICA 1: Controllo di sicurezza sul frame_id
+        if msg.header.frame_id and msg.header.frame_id != "left_fr3_camera_link_optical":
+            self.get_logger().warn(f"Attenzione! Frame errato: {msg.header.frame_id}. Atteso: left_fr3_camera_link_optical")
         self.current_edges = msg.lines
 
     def cost_function(self, qdot, qd_dot):
@@ -168,7 +141,6 @@ class CollisionTaskNode(Node):
 
         self._build_collision_cost()
 
-    #Compute the cost function (collisions,singularities,joint_limits)
     def _build_collision_cost(self):
         alpha_c = 8.0
         beta_c  = 1.0
@@ -185,24 +157,8 @@ class CollisionTaskNode(Node):
         beta_S  = 1.0
         rho_S   = 0.00
 
-        # ── LOG 3: verifica pose simboliche a q=0 dentro CasADi ─────────────────
-        q0 = np.zeros(self.left_model.nq)
-        F_test_left = casadi.Function(
-            "test_left",
-            [self.qL],
-            [self.left_cdata.oMi[1].translation,
-             self.left_cdata.oMi[2].translation,
-             self.left_cdata.oMi[3].translation]
-        )
-        res = F_test_left(q0)
-        self.get_logger().info("=== CasADi LEFT oMi translations @ q=0 ===")
-        for i, v in enumerate(res):
-            self.get_logger().info(f"  joint {i+1}: {np.array(v).flatten()}")
-
-        # ── H1: barriera collisioni ──────────────────────────────────────────────
         H1    = casadi.SX(0)
         d_min = casadi.SX(1e6)
-
         d_list   = []
         pair_names = []
 
@@ -237,7 +193,6 @@ class CollisionTaskNode(Node):
                 d_safe = casadi.fmax(d, 0.01)
                 H1 = H1 + casadi.exp(-alpha_c * d) *d**(-beta_c)
 
-        # ── H2: barriera limiti giunti (ora su LEFT) ─────────────────────────────
         H2 = casadi.SX(0)
         for i in range(self.left_model.nq):
             d_upper = -self.qL[i] + Q_LIMITS_MAX[i]
@@ -245,7 +200,6 @@ class CollisionTaskNode(Node):
             H2 = H2 + casadi.exp(-alpha_J * d_upper) * d_upper**(-beta_J) \
                     + casadi.exp(-alpha_J * d_lower) * d_lower**(-beta_J)
 
-        # ── H3: barriera singolarità (ora su LEFT) ───────────────────────────────
         J_ee    = cpin.getFrameJacobian(
             self.left_cmodel, self.left_cdata,
             self.left_cmodel.getFrameId('left_fr3_camera_link'),
@@ -256,17 +210,15 @@ class CollisionTaskNode(Node):
         H3      = rho_S * casadi.exp(-alpha_S * det_JJT) * det_JJT**(-beta_S)
 
         H_tot = rho_c * H1 + rho_J * H2 + H3
-        DH    = casadi.jacobian(H_tot, self.qL).T # DH calcolato rispetto a qL
+        DH    = casadi.jacobian(H_tot, self.qL).T 
 
         self.F_cost = casadi.Function(
             "F_cost", [self.qL, self.qR], [DH, H_tot, d_min],
             ["qL", "qR"], ["DH", "H_tot", "d_min"]
         )
-
     
-    #Define the constraint for a single segment which is visible
     def evaluate_single_segment_constraint(self, Rwc, pt_3, Jc, Jt, pa_camera, pb_camera):
-        tb = 10
+        tb = 6
         xt, yt, zt = pt_3
         Lt  = compute_interaction_matrix(xt, yt, zt)
 
@@ -277,7 +229,6 @@ class CollisionTaskNode(Node):
         Pct = Lt @ Jc_camera
         pt  = np.array([xt/zt, yt/zt])
 
-        # Rimosso Rwc_inv @ pa_world: i punti SONO GIA' nel frame camera
         xa, ya, za = pa_camera
         La  = compute_interaction_matrix(xa, ya, za)
         Pca = La @ Jc_camera
@@ -288,8 +239,6 @@ class CollisionTaskNode(Node):
         Pcb = Lb @ Jc_camera
         pb  = np.array([xb/zb, yb/zb])
 
-        # Controlla che il segmento sia effettivamente più vicino
-        # alla camera del tool 
         z_segment_avg = (za + zb) / 2
         if z_segment_avg >= zt:
             return None, None 
@@ -312,7 +261,10 @@ class CollisionTaskNode(Node):
         C = gamma + gamma_prime
 
         sbar = self.evaluate_sbar(A, B, C)
-        g    = -(A*sbar**2 + B*sbar + C)
+        
+        # MODIFICA 2: Aggiunto un margine per garantire la repulsione statica in velocità
+        margin = 0.006
+        g    = -(A*sbar**2 + B*sbar + C) + margin
 
         term1 = ((pb - pa).T @ (Pcb - Pca)) * (sbar**2)
         term2 = ((pb - pa).T @ (Pca - Pct) +
@@ -320,18 +272,16 @@ class CollisionTaskNode(Node):
         term3 = (pa - pt).T @ (Pca - Pct)
         Ec    = tb * (term1 + term2 + term3)
 
-        Ptt = Lt @ np.block([[Rwc.T,           np.zeros((3,3))],
+        # MODIFICA 3: Aggiunto il segno MENO a Rwc.T per la cinematica relativa del tool
+        Ptt = Lt @ np.block([[-Rwc.T,           np.zeros((3,3))],
                             [np.zeros((3,3)), np.zeros((3,3))]]) @ Jt
         Et  = -tb * ((pb - pa) * sbar + (pa - pt)).T @ Ptt
 
         E = np.concatenate((Ec, Et))
         return E, g
     
-    #Given the list of edges we define the constraints to occlusion avoidance
     def evaluate_E_g(self, Rwc, pt_3, Jc, Jt):
         constraints = []
-        
-        
         for edge in self.current_edges:
             pa_camera = np.array([edge.point_a.x, edge.point_a.y, edge.point_a.z])
             pb_camera = np.array([edge.point_b.x, edge.point_b.y, edge.point_b.z])
@@ -344,42 +294,6 @@ class CollisionTaskNode(Node):
 
         return constraints
 
-    # def evaluate_E_g(self, Rwc, Twc_translation, pt_3, Jc, Jt):
-    #     constraints = []
-        
-    #     # I 4 vertici fissi della faccia superiore nel frame 'world'
-    #     p_A = np.array([ 0.01,  0.15, 0.445])
-    #     p_B = np.array([-0.07,  0.15, 0.445])
-    #     p_C = np.array([-0.07,  0.07, 0.445])
-    #     p_D = np.array([ 0.01,  0.07, 0.445])
-
-    #     # Segmenti del perimetro
-    #     segments_world = [
-    #         (p_A, p_B),
-    #         (p_B, p_C),
-    #         (p_C, p_D),
-    #         (p_D, p_A)
-    #     ]
-
-    #     # Inversa della matrice di rotazione (R^T per le matrici ortonormali)
-    #     Rwc_inv = Rwc.T
-
-    #     for pa_world, pb_world in segments_world:
-            
-    #         # ---> LA TRASFORMAZIONE GEOMETRICA CORRETTA <---
-    #         # Sottraggo la posizione della telecamera e poi ruoto il vettore
-    #         pa_camera = Rwc_inv @ (pa_world - Twc_translation)
-    #         pb_camera = Rwc_inv @ (pb_world - Twc_translation)
-            
-    #         E, g = self.evaluate_single_segment_constraint(
-    #             Rwc, pt_3, Jc, Jt, pa_camera, pb_camera)
-            
-    #         if E is not None:
-    #             constraints.append((E, g))
-
-    #     return constraints
-
-    #Help function to evaluate the cost function
     def evaluate_sbar(self, A, B, C):
         if A > 1e-5:
             sbar = np.clip(-B / (2*A), 0.0, 1.0)
@@ -397,7 +311,6 @@ class CollisionTaskNode(Node):
         twist_msg_right = Twist()
         
         world_frame  = 'world'
-        # Inverto i frame TF letti dal listener (Camera a Sinistra, TCP Tool a Destra)
         link8_frame  = 'right_fr3_hand_tcp'
         camera_frame = 'left_fr3_camera_link_optical'
      
@@ -435,11 +348,10 @@ class CollisionTaskNode(Node):
                                       self.right_frame_id, 
                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
         
-        #Non so perché si muove troppo anche dopo aver raggiunto lo zero
-        if np.linalg.norm(e) < 1e-3:
-            left_twist_command = np.zeros(6)
-        else:
-            left_twist_command = -Rwc_augmented @ np.linalg.pinv(L) @ e
+        # if np.linalg.norm(e) < 1e-3:
+        #     left_twist_command = np.zeros(6)
+        # else:
+        left_twist_command = -Rwc_augmented @ np.linalg.pinv(L) @ e
         LJl     = L @ Rwc_augmented @ J_left
         LJl_dag = np.linalg.pinv(LJl)
 
@@ -448,38 +360,24 @@ class CollisionTaskNode(Node):
         H_val     = float(result[1])
         d_min_val = float(result[2])
 
-        self.get_logger().info(
-            f'H={H_val:.4f}  d_min={d_min_val:.4f} m  DH_norm={np.linalg.norm(DH_num):.4f}'
-        )
-
         ql_nullspace = ((np.eye(7, dtype=np.int_) - LJl_dag @ LJl) @ DH_num).flatten()
-        # Stessa identica formula originaria applicata a J_left e left_twist_command
-        ql_dot_des   = 1.2* np.linalg.pinv(J_left) @ left_twist_command-0.0*ql_nullspace
-
+        ql_dot_des   = 1.2 * np.linalg.pinv(J_left) @ left_twist_command - 0.0 * ql_nullspace
         
         t = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
         right_twist_command = np.array([
             0.0 * math.cos(t),
             0.0 * math.sin(t), 
-            0.1 * math.sin(t),
+            0.0 * math.sin(t),
             0.0,
             0.0,
             0.0
         ])
         qr_dot_des = np.linalg.pinv(J_right) @ right_twist_command
 
-        # Concatena mettendo la left per prima, coerenza con CasADi qL, qR
         qdot_current = np.concatenate((self.qdot_left, self.qdot_right))
         qd_desired   = np.concatenate((ql_dot_des, qr_dot_des))
 
-
-        Twc_translation = np.array([
-            Twc.transform.translation.x,
-            Twc.transform.translation.y,
-            Twc.transform.translation.z
-        ])
-
-        constraints = self.evaluate_E_g(Rwc,pt_3, J_left, J_right)
+        constraints = self.evaluate_E_g(Rwc, pt_3, J_left, J_right)
 
         scipy_constraints = []
         for E_i, g_i in constraints:
@@ -523,17 +421,15 @@ class CollisionTaskNode(Node):
         twist_msg_right.angular.y = float(right_twist_command_opt[4])
         twist_msg_right.angular.z = float(right_twist_command_opt[5])
 
-        self.get_logger().info(f'x={x:.4f} y={y:.4f} z={z:.4f}')
         self.left_publisher.publish(twist_msg_left)
         self.right_publisher.publish(twist_msg_right)
 
-    #Joint values left
     def left_listener_callback(self, msg):
         name_to_pos = dict(zip(msg.name, msg.position))
         name_to_vel = dict(zip(msg.name, msg.velocity))
         self.q_left    = np.array([name_to_pos.get(n, 0.0) for n in self.pinocchio_left_expected_names])
         self.qdot_left = np.array([name_to_vel.get(n, 0.0) for n in self.pinocchio_left_expected_names])
-    #Joint values right
+
     def right_listener_callback(self, msg):
         name_to_pos = dict(zip(msg.name, msg.position))
         name_to_vel = dict(zip(msg.name, msg.velocity))

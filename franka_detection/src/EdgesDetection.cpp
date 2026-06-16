@@ -5,315 +5,221 @@
 #include <franka_msgs/msg/line.hpp>
 #include <franka_msgs/msg/edges.hpp>
 
-// ViSP
-#include <visp3/gui/vpDisplayOpenCV.h>
-
-#include <visp3/core/vpImage.h>
-#include <visp3/core/vpImageConvert.h>
-#include <visp3/core/vpCameraParameters.h>
-#include <visp3/mbt/vpMbEdgeTracker.h>
-#include <visp3/core/vpException.h>
-#include <visp3/sensor/vpRealSense2.h>
-
-#include <visp3/mbt/vpMbtPolygon.h>
-#include <visp3/mbt/vpMbtDistanceLine.h>
-
-#include <visp3/core/vpPoint.h>
-
-
-#include "tf2/exceptions.h"
-#include "tf2_ros/message_filter.h"
-#include "tf2_ros/transform_listener.h"
-#include "tf2_ros/buffer.h"
+// OpenCV
+#include <opencv2/opencv.hpp>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
 
 class EdgesDetectionNode : public rclcpp::Node
 {
-    public:
+public:
     EdgesDetectionNode()
     : Node("edges_detection_node")
     {        
-
+        // Puoi tenere questo per usi futuri se serve, altrimenti puoi rimuoverlo
         model_path_ = ament_index_cpp::get_package_share_directory("franka_detection")
                   + "/models/box.cao";
 
-
         rgb_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/left_camera/image", 5,
-        std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));
-
+            "/left_camera/image", 5,
+            std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));
         
         depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/left_camera/depth_image", 5,
-        std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));
-
+            "/left_camera/depth_image", 5,
+            std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));
         
         info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-        "/left_camera/camera_info", 5,
-        std::bind(&EdgesDetectionNode::camera_info_callback, this, std::placeholders::_1));
-
+            "/left_camera/camera_info", 5,
+            std::bind(&EdgesDetectionNode::camera_info_callback, this, std::placeholders::_1));
     
         edges_pub_ = this->create_publisher<franka_msgs::msg::Edges>("/edges", 1);
+        
+        // Publisher per l'immagine di debug
         debug_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
             "/edges_detection/debug_image", 1);
-
         
         timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(33),
-        std::bind(&EdgesDetectionNode::on_timer, this));     
-        
-        
-        tf_buffer_ =std::make_shared<tf2_ros::Buffer>(this->get_clock(),std::chrono::seconds(10));
-        tf_listener_ =std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
+            std::chrono::milliseconds(33),
+            std::bind(&EdgesDetectionNode::on_timer, this));
     }
 
-  private:
-
+private:
 
     void rgb_callback(const sensor_msgs::msg::Image::SharedPtr msg)
     {
         auto cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
-        rgb_image_ = cv_ptr->image;  // cv::Mat BGR
-             
-        
-        visp::vpImageConvert::convert(rgb_image_, I_);  
-        visp::vpImageConvert::convert(rgb_image_, I_color_);  
-
-        if (!display_ && I_color_.getSize() > 0) {
-        display_ = new visp::vpDisplayOpenCV();
-        display_->init(I_color_, -1, -1, "Debug Window");
-    }
-        
+        rgb_image_ = cv_ptr->image;  
         is_image_ = true;
     }
 
     void depth_callback(const sensor_msgs::msg::Image::SharedPtr msg)
     {
-        auto cv_ptr = cv_bridge::toCvCopy(msg, "32FC1");
-        depth_image_ = cv_ptr->image;  // cv::Mat float32 in metri
+        // Se usi profondità in metri, 32FC1 è corretto. 
+        // Se usi millimetri (es. RealSense standard), potrebbe essere 16UC1.
+        auto cv_ptr = cv_bridge::toCvCopy(msg, "32FC1"); 
+        depth_image_ = cv_ptr->image;  
     }
 
     void camera_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
     {
-        //Prelevo i dati della camera
         if (camera_ready_) return;
 
-        double fx=msg->k[0];
-        double fy=msg->k[4];
-        double cx=msg->k[2];
-        double cy=msg->k[5];
+        fx_ = msg->k[0]; fy_ = msg->k[4];
+        cx_ = msg->k[2]; cy_ = msg->k[5];
                     
-        cam_.initPersProjWithoutDistortion(fx, fy, cx, cy);
         camera_ready_ = true;
+    }
 
-       
 
-        //Carico modello dell'oggetto .cao e poi i parametri per le detection
-        tracker_.loadModel(model_path_);
-        tracker_.setCameraParameters(cam_);
-        
-        
-        tracker_.setAngleAppear(visp::vpMath::rad(88)); //Da tenere altini per massimizzare la probabilità di vedere facce
-        tracker_.setAngleDisappear(visp::vpMath::rad(90));
-        tracker_.setNearClippingDistance(0.1);
-        tracker_.setFarClippingDistance(100.0);
-        tracker_.setClipping(tracker_.getClipping() | visp::vpMbtPolygon::FOV_CLIPPING);
-
-        // visp::vpKltOpencv klt_settings;
-        // klt_settings.setMaxFeatures(300);
-        // klt_settings.setWindowSize(5);
-        // klt_settings.setQuality(0.015);
-        // klt_settings.setMinDistance(8);
-        // klt_settings.setHarrisFreeParameter(0.01);
-        // klt_settings.setBlockSize(3);
-        // klt_settings.setPyramidLevels(3);
-        // tracker_.setKltOpencv(klt_settings);
-
-        visp::vpMe me;
-        me.setMaskSize(3);
-        me.setMaskNumber(180);
-        me.setRange(30); //
-        me.setThreshold(2000); //Non troppo alto
-        me.setMu1(0.5); me.setMu2(0.5);
-        me.setSampleStep(5); //Importante tenerlo altino eh!
-        me.setNbTotalSample(250);
-        tracker_.setMovingEdge(me);
-
-    
+    // Prendo la profonità del centro
+    float get_median_depth(const cv::Mat& depth, int u, int v, int window_size = 5) {
+        std::vector<float> depths;
+        int half_w = window_size / 2;
+        for (int dy = -half_w; dy <= half_w; ++dy) {
+            for (int dx = -half_w; dx <= half_w; ++dx) {//assegno la profondità ad ognuno dei 25 pixel intorno al centro
+                int nx = u + dx;
+                int ny = v + dy;
+                // Controlla che non usciamo dai bordi dell'immagine
+                if (nx >= 0 && nx < depth.cols && ny >= 0 && ny < depth.rows) {
+                    float d = depth.at<float>(ny, nx);
+                    // Accetta solo profondità valide (es. > 10cm)
+                    if (d > 0.1f && !std::isnan(d)) { 
+                        depths.push_back(d);//creo la lista di profondità dei pixel intorno al centro
+                    }
+                }
+            }
+        }
+        if (depths.empty()) return 0.0f;
+        std::sort(depths.begin(), depths.end());
+        return depths[depths.size() / 2]; // Ritorna la mediana
     }
 
     void on_timer()
     {
         franka_msgs::msg::Edges edges_msg;
-        //Aspetto che la camera sia pronta e l'immagine ricevuta
         if (!camera_ready_ || !is_image_) {
-          
-          return;
-        }
-        //Inizializzo il tracker
-        if (!tracker_initialized_) {
-            if (!setup_visp_tracker()) return; 
-        }
-
-        
-
-        try {
-            tracker_.track(I_);  
-            tracker_.getPose(cMo_);
-            std::list<visp::vpMbtDistanceLine*> lines; //lista delle linee delle facce
-
-            tracker_.getLline(lines, 0);  //inizializzo la lista di linee
-
-            edges_msg.lines.clear();
-            
-            
-            edges_msg.header.stamp = this->now();
-            edges_msg.header.frame_id = "left_fr3_camera_link_optical";
-            
-            
-            
-
-            //Scorro per tutte le linee e prendo il poligono(la faccia) associato alla linea k
-            for (visp::vpMbtDistanceLine* line : lines) {
-                if (!line) continue;
-
-                visp::vpMbtPolygon polygon = line->getPolygon();
-                
-                
-                // if (!polygon.isVisible()) continue;
-                
-               
-                if (!line->isVisible()) continue;
-
-               
-                franka_msgs::msg::Line single_line;
-
-                // Popolo il punto di inizio
-                single_line.point_a.x = line->p1->get_X();
-                single_line.point_a.y = line->p1->get_Y();
-                single_line.point_a.z = line->p1->get_Z();
-
-                // Popolo il punto di fine
-                single_line.point_b.x = line->p2->get_X();
-                single_line.point_b.y = line->p2->get_Y();
-                single_line.point_b.z = line->p2->get_Z();
-
-                // Inserisco la singola linea nell'array dinamico del messaggio principale
-                edges_msg.lines.push_back(single_line);
-            }
-
-            if (!edges_msg.lines.empty()) {
-                edges_pub_->publish(edges_msg);
-            }
-
-            
-                         
-        } catch (const visp::vpException & e) {
-            RCLCPP_WARN(this->get_logger(), "Tracking perso: %s", e.what());
-            tracker_initialized_ = false;
             return;
         }
+
+        line_vector_.clear();
+
+        // 1. Creiamo una copia dell'immagine RGB originale su cui disegnare
+        cv::Mat debug_image = rgb_image_.clone();
+
+        // 2. Segmentazione del colore
+        cv::Mat hsv, mask;
+        cv::cvtColor(rgb_image_, hsv, cv::COLOR_BGR2HSV);
+
        
-        //Blocco che serve solo per visualizzare sul display il tracking e pubblicare su un topic
-        if (display_) {
+        // Attualmente questo filtra una tonalità di verde. Da cambiare a seconda dell'ostacolo diocan
+        cv::Scalar lower(40, 100, 100);
+        cv::Scalar upper(80, 255, 255);
+        cv::inRange(hsv, lower, upper, mask);
+
+        //Toglie rumore
+        cv::morphologyEx(mask, mask, cv::MORPH_OPEN, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)));
+
+        
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        // Sicurezza: procedi solo se ha trovato almeno una macchia di colore
+        if (!contours.empty()) {
             
-            visp::vpDisplay::display(I_color_);           
-            tracker_.display(I_color_, cMo_, cam_, visp::vpColor::red, 2);
-            visp::vpDisplay::displayFrame(I_color_, cMo_, cam_, 0.025, visp::vpColor::none, 3);       
-            visp::vpDisplay::flush(I_color_);           
-            visp::vpDisplay::getImage(I_color_, I_color_);
+            auto biggest = *std::max_element(contours.begin(), contours.end(),
+                [](auto& a, auto& b){ return cv::contourArea(a) < cv::contourArea(b); });
+
+
+            for (int i=0;i<contours.size();i++)
+            {
+                if (cv::contourArea(contours[i]) > 500.0) 
+                {
+                    cv::Rect bbox = cv::boundingRect(contours.at(i));
+
+                
+                    cv::drawContours(debug_image, contours, -1, cv::Scalar(0, 255, 0), 2);
+                    
+                    
+                    cv::rectangle(debug_image, bbox, cv::Scalar(0, 0, 255), 2);
+
+                    cv::Point center(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
+                    
+
+
+                    float z = get_median_depth(depth_image_, center.x, center.y);
+
+                    auto deproject = [&](int u, int v, float depth) {
+                            geometry_msgs::msg::Point pt;
+                            pt.x = (u - cx_) * depth / fx_;
+                            pt.y = (v - cy_) * depth / fy_;
+                            pt.z = depth;
+                            return pt;
+                        };
+                    auto pt_tl = deproject(bbox.x, bbox.y, z);                               // Top-Left
+                    auto pt_tr = deproject(bbox.x + bbox.width, bbox.y, z);                  // Top-Right
+                    auto pt_br = deproject(bbox.x + bbox.width, bbox.y + bbox.height, z);    // Bottom-Right
+                    auto pt_bl = deproject(bbox.x, bbox.y + bbox.height, z);
+
+                    franka_msgs::msg::Line l_top, l_right, l_bottom, l_left;
+                    l_top.point_a = pt_tl;    l_top.point_b = pt_tr;
+                    l_right.point_a = pt_tr;  l_right.point_b = pt_br;
+                    l_bottom.point_a = pt_br; l_bottom.point_b = pt_bl;
+                    l_left.point_a = pt_bl;   l_left.point_b = pt_tl;
+
+                    line_vector_.insert(line_vector_.end(), {l_top, l_right, l_bottom, l_left});
+                }
+
+            }
+
+            
         }
         
-        cv::Mat debug_mat;
-        visp::vpImageConvert::convert(I_color_, debug_mat);
-
-        auto debug_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", debug_mat).toImageMsg();
-        debug_msg->header.stamp = this->now();
-        debug_image_pub_->publish(*debug_msg);
-        //////////////////////////////////////////////////////////////////////////
-
-    }
-
-
-    bool setup_visp_tracker()
-    {
-       try {
-            
-            //Necessito di una trasformazione da camera link optical a box come stima inziiale
-            //da dare al traker
-            auto Tco = tf_buffer_->lookupTransform("left_fr3_camera_link_optical", "box", tf2::TimePointZero);
-            
-            visp::vpTranslationVector transl_vec{
-                Tco.transform.translation.x, Tco.transform.translation.y, Tco.transform.translation.z};
-            
-            visp::vpQuaternionVector quat_vec{
-                Tco.transform.rotation.x, Tco.transform.rotation.y, Tco.transform.rotation.z, Tco.transform.rotation.w};
-
-            cMo_.buildFrom(transl_vec, quat_vec);
-            tracker_.initFromPose(I_, cMo_);
-            
-            tracker_initialized_ = true;
-            RCLCPP_INFO(this->get_logger(), "Tracker ViSP inizializzato con successo!");
-            return true;
-
-        } catch (const tf2::TransformException & ex) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, 
-                "In attesa del frame TF dell'oggetto: %s", ex.what());
-            return false;
-        }
+        edges_msg.lines = line_vector_; // <-- Sintassi corretta
+        edges_msg.header.stamp = this->now();
+        edges_msg.header.frame_id = "left_fr3_camera_link_optical"; 
+                
+        edges_pub_->publish(edges_msg);
+                    
       
-               
+        // 4. Converti l'immagine modificata in un messaggio ROS e pubblicala
+        auto debug_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", debug_image).toImageMsg();
+        debug_msg->header.stamp = this->now();
+        
+        debug_msg->header.frame_id = "left_fr3_camera_link_optical"; 
+        debug_image_pub_->publish(*debug_msg);
     }
 
-
-
-    //Membri ros2
+    // ── Membri ROS2 ──────────────────────────────────────────────────────────────
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr rgb_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub_;
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
     rclcpp::Publisher<franka_msgs::msg::Edges>::SharedPtr edges_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-
-
     rclcpp::TimerBase::SharedPtr timer_;
 
-    //Membri visp
-    visp::vpCameraParameters cam_;
-  
-    visp::vpMbEdgeTracker tracker_;
     std::string model_path_;
-    visp::vpImage<unsigned char> I_;
-    visp::vpImage<visp::vpRGBa> I_color_;
-    visp::vpHomogeneousMatrix cMo_;
 
-    //Flag per sincro
-    bool camera_ready_=false;
-    bool is_image_=false;
-    bool tracker_initialized_=false;
+    std::vector<franka_msgs::msg::Line> line_vector_;
+    
+    // ── Flag sincronizzazione ────────────────────────────────────────────────────
+    bool camera_ready_        = false;
+    bool is_image_            = false;
+    bool tracker_initialized_ = false;
 
-    //OpenCV
+    // ── OpenCV & Display ─────────────────────────────────────────────────────────
     cv::Mat rgb_image_;
     cv::Mat depth_image_;
 
-    //Per visualizzare
-    visp::vpDisplayOpenCV* display_ {nullptr};
-    
-  
-
-   
-
-
+    double fx_;
+    double fy_;
+    double cx_;
+    double cy_;
 };
-
 
 int main(int argc, char * argv[])
 {
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<EdgesDetectionNode>());
-  rclcpp::shutdown();
-  return 0;
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<EdgesDetectionNode>());
+    rclcpp::shutdown();
+    return 0;
 }
