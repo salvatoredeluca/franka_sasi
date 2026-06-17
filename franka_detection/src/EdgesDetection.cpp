@@ -16,9 +16,9 @@ public:
     EdgesDetectionNode()
     : Node("edges_detection_node")
     {        
-        // Puoi tenere questo per usi futuri se serve, altrimenti puoi rimuoverlo
-        model_path_ = ament_index_cpp::get_package_share_directory("franka_detection")
-                  + "/models/box.cao";
+       
+        // model_path_ = ament_index_cpp::get_package_share_directory("franka_detection")
+        //           + "/models/box.cao";
 
         //For simulation
         // rgb_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
@@ -115,10 +115,7 @@ private:
 
         // 1. Creiamo una copia dell'immagine RGB originale su cui disegnare
         cv::Mat debug_image = rgb_image_.clone();
-
-
-       
-       
+               
         cv::Mat hsv, mask;
         cv::cvtColor(rgb_image_, hsv, cv::COLOR_BGR2HSV);
 
