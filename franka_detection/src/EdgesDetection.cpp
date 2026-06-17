@@ -106,16 +106,17 @@ private:
         // 1. Creiamo una copia dell'immagine RGB originale su cui disegnare
         cv::Mat debug_image = rgb_image_.clone();
 
-        // 2. Segmentazione del colore
+
+       
+       
         cv::Mat hsv, mask;
         cv::cvtColor(rgb_image_, hsv, cv::COLOR_BGR2HSV);
 
        
-        // Attualmente questo filtra una tonalità di verde. Da cambiare a seconda dell'ostacolo diocan
-        cv::Scalar lower(40, 100, 100);
-        cv::Scalar upper(80, 255, 255);
+        cv::Scalar lower(35, 180, 200); // H min, S min (alta), V min (alto)
+        cv::Scalar upper(85, 255, 255); // H max, S max, V max
+        
         cv::inRange(hsv, lower, upper, mask);
-
         //Toglie rumore
         cv::morphologyEx(mask, mask, cv::MORPH_OPEN, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)));
 
@@ -126,52 +127,58 @@ private:
         // Sicurezza: procedi solo se ha trovato almeno una macchia di colore
         if (!contours.empty()) {
             
+            // Trovi il più grande (nota: al momento non lo stai usando nel resto del codice, 
+            // ma lo lascio esattamente come lo hai scritto tu).
             auto biggest = *std::max_element(contours.begin(), contours.end(),
                 [](auto& a, auto& b){ return cv::contourArea(a) < cv::contourArea(b); });
 
-
-            for (int i=0;i<contours.size();i++)
+            for (int i=0; i<contours.size(); i++)
             {
+                // 1. Filtro dimensione: scartiamo il rumore e prendiamo solo oggetti grandi
                 if (cv::contourArea(contours[i]) > 500.0) 
                 {
                     cv::Rect bbox = cv::boundingRect(contours.at(i));
 
-                
-                    cv::drawContours(debug_image, contours, -1, cv::Scalar(0, 255, 0), 2);
+                    // 2. FILTRO GEOMETRICO: Calcoliamo l'Aspect Ratio
+                    float aspect_ratio = (float)bbox.width / bbox.height;
+
+                  
+                        // Disegnamo SOLO questo contorno (nota l'indice 'i' al posto di '-1')
+                        cv::drawContours(debug_image, contours, i, cv::Scalar(0, 255, 0), 2);
+                        
+                        // Disegniamo il rettangolo rosso
+                        cv::rectangle(debug_image, bbox, cv::Scalar(0, 0, 255), 2);
+
+                        // --- INIZIO DELLA TUA LOGICA 3D ---
+                        cv::Point center(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
+                        
+                        float z = get_median_depth(depth_image_, center.x, center.y);
+
+                        auto deproject = [&](int u, int v, float depth) {
+                                geometry_msgs::msg::Point pt;
+                                pt.x = (u - cx_) * depth / fx_;
+                                pt.y = (v - cy_) * depth / fy_;
+                                pt.z = depth;
+                                return pt;
+                            };
+                            
+                        auto pt_tl = deproject(bbox.x, bbox.y, z);                               // Top-Left
+                        auto pt_tr = deproject(bbox.x + bbox.width, bbox.y, z);                  // Top-Right
+                        auto pt_br = deproject(bbox.x + bbox.width, bbox.y + bbox.height, z);    // Bottom-Right
+                        auto pt_bl = deproject(bbox.x, bbox.y + bbox.height, z);
+
+                        franka_msgs::msg::Line l_top, l_right, l_bottom, l_left;
+                        l_top.point_a = pt_tl;    l_top.point_b = pt_tr;
+                        l_right.point_a = pt_tr;  l_right.point_b = pt_br;
+                        l_bottom.point_a = pt_br; l_bottom.point_b = pt_bl;
+                        l_left.point_a = pt_bl;   l_left.point_b = pt_tl;
+
+                        // Salviamo le linee della BORRACCIA nel vettore
+                        line_vector_.insert(line_vector_.end(), {l_top, l_right, l_bottom, l_left});
+                        // --- FINE DELLA TUA LOGICA 3D ---
                     
-                    
-                    cv::rectangle(debug_image, bbox, cv::Scalar(0, 0, 255), 2);
-
-                    cv::Point center(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
-                    
-
-
-                    float z = get_median_depth(depth_image_, center.x, center.y);
-
-                    auto deproject = [&](int u, int v, float depth) {
-                            geometry_msgs::msg::Point pt;
-                            pt.x = (u - cx_) * depth / fx_;
-                            pt.y = (v - cy_) * depth / fy_;
-                            pt.z = depth;
-                            return pt;
-                        };
-                    auto pt_tl = deproject(bbox.x, bbox.y, z);                               // Top-Left
-                    auto pt_tr = deproject(bbox.x + bbox.width, bbox.y, z);                  // Top-Right
-                    auto pt_br = deproject(bbox.x + bbox.width, bbox.y + bbox.height, z);    // Bottom-Right
-                    auto pt_bl = deproject(bbox.x, bbox.y + bbox.height, z);
-
-                    franka_msgs::msg::Line l_top, l_right, l_bottom, l_left;
-                    l_top.point_a = pt_tl;    l_top.point_b = pt_tr;
-                    l_right.point_a = pt_tr;  l_right.point_b = pt_br;
-                    l_bottom.point_a = pt_br; l_bottom.point_b = pt_bl;
-                    l_left.point_a = pt_bl;   l_left.point_b = pt_tl;
-
-                    line_vector_.insert(line_vector_.end(), {l_top, l_right, l_bottom, l_left});
                 }
-
             }
-
-            
         }
         
         edges_msg.lines = line_vector_; // <-- Sintassi corretta

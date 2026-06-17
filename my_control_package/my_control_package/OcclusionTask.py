@@ -239,6 +239,8 @@ class CollisionTaskNode(Node):
         Pcb = Lb @ Jc_camera
         pb  = np.array([xb/zb, yb/zb])
 
+        #Se l'end effector (o oggetto da trackare) ha profondità
+        #inferiore  dell'oggetto occludente non imponiamo nessun vincolo
         z_segment_avg = (za + zb) / 2
         if z_segment_avg >= zt:
             return None, None 
