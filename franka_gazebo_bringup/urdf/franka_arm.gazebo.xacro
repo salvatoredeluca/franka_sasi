@@ -12,10 +12,10 @@
 
     <!-- Added camera to right robot, should add a proper camera link -->
     <xacro:franka_gazebo_camera link_reference="right_fr3_camera_link" 
-                                sensor_name="right_camera" gz_topic="right_camera"/>
+                                sensor_name="right_camera" gz_topic="camera_right"/>
     
     <xacro:franka_gazebo_camera link_reference="left_fr3_camera_link" 
-                                sensor_name="left_camera" gz_topic="left_camera"/>
+                                sensor_name="left_camera" gz_topic="camera_left"/>
 
 </robot>
 

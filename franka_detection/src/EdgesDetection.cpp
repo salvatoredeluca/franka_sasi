@@ -20,16 +20,26 @@ public:
         model_path_ = ament_index_cpp::get_package_share_directory("franka_detection")
                   + "/models/box.cao";
 
+        //For simulation
+        // rgb_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+        //     "/left/camera_left/color/image_raw", 5,
+        //     std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));     
+        // depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+        //     "/left/camera_left/color/image_raw/compressedDepth", 5,
+        //     std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));       
+        // info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
+        //     "/left/camera_left/color/camera_info", 5,
+        //     std::bind(&EdgesDetectionNode::camera_info_callback, this, std::placeholders::_1));
+
+        //In real
         rgb_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/left_camera/image", 5,
-            std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));
-        
+            "/left/camera_left/color/image_raw", 5,
+            std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));     
         depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/left_camera/depth_image", 5,
-            std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));
-        
+            "/left/camera_left/color/image_raw/compressedDepth", 5,
+            std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));       
         info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-            "/left_camera/camera_info", 5,
+            "/left/camera_left/color/camera_info", 5,
             std::bind(&EdgesDetectionNode::camera_info_callback, this, std::placeholders::_1));
     
         edges_pub_ = this->create_publisher<franka_msgs::msg::Edges>("/edges", 1);
