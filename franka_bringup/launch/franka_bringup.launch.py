@@ -403,7 +403,7 @@ def generate_robot_nodes(context):
                     'camera_name': f'camera_{arm_prefix}',
                     'camera_namespace': namespace,
                     'rgb_camera.color_profile': '640x480x30',
-                    'enable_depth': 'false',
+                    'enable_depth': 'true',
                 }.items(),
             ))
 

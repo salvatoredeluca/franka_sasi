@@ -1,12 +1,12 @@
 services:
-  franka_ros2_humble:
+  franka_ros2_humble_sasi:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         - USER_UID=${USER_UID}
         - USER_GID=${USER_GID}
-    container_name: franka_ros2_humble
+    container_name: franka_ros2_humble_sasi
     network_mode: "host"
     privileged: true
     tty: true

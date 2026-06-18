@@ -36,7 +36,7 @@ public:
             "/left/camera_left/color/image_raw", 5,
             std::bind(&EdgesDetectionNode::rgb_callback, this, std::placeholders::_1));     
         depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/left/camera_left/color/image_raw/compressedDepth", 5,
+            "/left/camera_left/depth/image_rect_raw", 5,
             std::bind(&EdgesDetectionNode::depth_callback, this, std::placeholders::_1));       
         info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
             "/left/camera_left/color/camera_info", 5,
@@ -66,8 +66,8 @@ private:
     {
         // Se usi profondità in metri, 32FC1 è corretto. 
         // Se usi millimetri (es. RealSense standard), potrebbe essere 16UC1.
-        auto cv_ptr = cv_bridge::toCvCopy(msg, "32FC1"); 
-        depth_image_ = cv_ptr->image;  
+        auto cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1);
+        depth_image_ = cv_ptr->image;
     }
 
     void camera_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
@@ -86,24 +86,30 @@ private:
         std::vector<float> depths;
         int half_w = window_size / 2;
         for (int dy = -half_w; dy <= half_w; ++dy) {
-            for (int dx = -half_w; dx <= half_w; ++dx) {//assegno la profondità ad ognuno dei 25 pixel intorno al centro
+            for (int dx = -half_w; dx <= half_w; ++dx) {
                 int nx = u + dx;
                 int ny = v + dy;
+                
                 // Controlla che non usciamo dai bordi dell'immagine
                 if (nx >= 0 && nx < depth.cols && ny >= 0 && ny < depth.rows) {
-                    float d = depth.at<float>(ny, nx);
-                    // Accetta solo profondità valide (es. > 10cm)
-                    if (d > 0.1f && !std::isnan(d)) { 
-                        depths.push_back(d);//creo la lista di profondità dei pixel intorno al centro
+                    uint16_t d = depth.at<uint16_t>(ny, nx);
+                    
+                    // Accetta solo profondità > 100 mm (ovvero 10 cm, elimina il rumore)
+                    if (d > 100) { 
+                        // INSERIAMO NELLA LISTA E DIVIDIAMO PER 1000 PER AVERE I METRI
+                        depths.push_back(static_cast<float>(d) / 1000.0f);
                     }
                 }
             }
-        }
-        if (depths.empty()) return 0.0f;
-        std::sort(depths.begin(), depths.end());
-        return depths[depths.size() / 2]; // Ritorna la mediana
     }
-
+    
+    // Ora se restituisce 0, è perché la telecamera è davvero cieca in quel punto
+    if (depths.empty()) return 0.0f;
+    
+    std::sort(depths.begin(), depths.end());
+    return depths[depths.size() / 2]; // Ritorna la mediana in METRI
+}
+    
     void on_timer()
     {
         franka_msgs::msg::Edges edges_msg;
@@ -120,8 +126,8 @@ private:
         cv::cvtColor(rgb_image_, hsv, cv::COLOR_BGR2HSV);
 
        
-        cv::Scalar lower(35, 180, 200); // H min, S min (alta), V min (alto)
-        cv::Scalar upper(85, 255, 255); // H max, S max, V max
+       cv::Scalar lower(85, 100, 50); //azzurro petrolio
+        cv::Scalar upper(110, 255, 255);
         
         cv::inRange(hsv, lower, upper, mask);
         //Toglie rumore
@@ -159,12 +165,16 @@ private:
                         // --- INIZIO DELLA TUA LOGICA 3D ---
                         cv::Point center(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
                         
+                        // 1. Chiami la funzione per ottenere il valore
                         float z = get_median_depth(depth_image_, center.x, center.y);
+
+   
+                        RCLCPP_INFO(this->get_logger(), "Profondita al pixel [u:%d, v:%d] -> %f m", center.x, center.y, z);
 
                         auto deproject = [&](int u, int v, float depth) {
                                 geometry_msgs::msg::Point pt;
-                                pt.x = (u - cx_) * depth / fx_;
-                                pt.y = (v - cy_) * depth / fy_;
+                                pt.x = (u - cx_)* depth / fx_;
+                                pt.y = (v - cy_)* depth  / fy_;
                                 pt.z = depth;
                                 return pt;
                             };
