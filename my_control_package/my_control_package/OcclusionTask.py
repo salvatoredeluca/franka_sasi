@@ -8,23 +8,43 @@ import os
 import math
 import rclpy
 import casadi
+from std_msgs.msg import Bool 
 from pinocchio import casadi as cpin
+from rclpy.qos import qos_profile_sensor_data
 from scipy.optimize import minimize
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32MultiArray,Float32
 from sensor_msgs.msg import JointState, CameraInfo, Image
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-
+from sensor_msgs.msg import JointState, Joy   # aggiungi Joy all'import esistente
 from franka_msgs.msg import Edges, Line
+
+
+
+
 
 class CollisionTaskNode(Node):
     def __init__(self):
         super().__init__('collision_task_node')
 
+        
+        self._emergency_stop = False
+        
+        self.joy_sub = self.create_subscription(
+        Joy, '/joy', self.joy_callback, 5
+        )
+        self.joy_deadzone = 0.05
+
+        
+
+        
+
+        
         # LEFT ARM (Camera - Ora è lui il principale/visuale)
         doc_left = self.urdf_file('left')
         left_urdf_string = doc_left.toxml()
@@ -74,6 +94,11 @@ class CollisionTaskNode(Node):
         self.qdot_left = None
         self.q_right     = None
         self.qdot_right  = None
+        self.right_twist_command = np.zeros(6)
+
+        # modulo della velocità
+        self.linear_speed = 0.05      # m/s
+        self.angular_speed = 0.10     # rad/s
 
         self.Xt = None
         self.Yt = None
@@ -86,9 +111,9 @@ class CollisionTaskNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.subscription_left_joints = self.create_subscription(
-            JointState, '/left/joint_states', self.left_listener_callback, 10)
+            JointState, '/left/joint_states', self.left_listener_callback, qos_profile_sensor_data)
         self.subscription_right_joints = self.create_subscription(
-            JointState, '/right/joint_states',  self.right_listener_callback,  10)
+            JointState, '/right/joint_states',  self.right_listener_callback,  qos_profile_sensor_data)
 
         self.left_publisher = self.create_publisher(Twist, 'left/ee_twist_command', 1)
         self.right_publisher  = self.create_publisher(Twist, 'right/ee_twist_command',  1)
@@ -100,8 +125,11 @@ class CollisionTaskNode(Node):
         self.start_time = self.get_clock().now()
         self.timer = self.create_timer(0.01, self.on_timer)
 
+        self.error_publisher = self.create_publisher(Float32MultiArray, '/error_image_space', 5)
+        self.H_value_publisher=self.create_publisher(Float32,'/H',5)
+        
+
     def edges_callback(self, msg):
-        # MODIFICA 1: Controllo di sicurezza sul frame_id
         if msg.header.frame_id and msg.header.frame_id != "left_fr3_camera_link_optical":
             self.get_logger().warn(f"Attenzione! Frame errato: {msg.header.frame_id}. Atteso: left_fr3_camera_link_optical")
         self.current_edges = msg.lines
@@ -144,18 +172,18 @@ class CollisionTaskNode(Node):
     def _build_collision_cost(self):
         alpha_c = 8.0
         beta_c  = 1.0
-        rho_c   = 0.0016
+        rho_c   = 0.004
 
         alpha_J = 10.0
         beta_J  = 1.0
-        rho_J   = 0.005
+        rho_J   = 0.05
 
         Q_LIMITS_MAX = [ 2.9007,  1.8361,  2.9007, -0.1169,  2.8763,  4.6216,  3.0508]
         Q_LIMITS_MIN = [-2.9007, -1.8361, -2.9007, -3.0770, -2.8763,  0.4398, -3.0508]
 
-        alpha_S = 18
+        alpha_S = 10
         beta_S  = 1.0
-        rho_S   = 0.00
+        rho_S   = 0.0002
 
         H1    = casadi.SX(0)
         d_min = casadi.SX(1e6)
@@ -216,9 +244,10 @@ class CollisionTaskNode(Node):
             "F_cost", [self.qL, self.qR], [DH, H_tot, d_min],
             ["qL", "qR"], ["DH", "H_tot", "d_min"]
         )
-    
+
+    #Functions to impose the constraints for the optimization problem
     def evaluate_single_segment_constraint(self, Rwc, pt_3, Jc, Jt, pa_camera, pb_camera):
-        tb = 6
+        tb = 4
         xt, yt, zt = pt_3
         Lt  = compute_interaction_matrix(xt, yt, zt)
 
@@ -227,6 +256,7 @@ class CollisionTaskNode(Node):
         Jc_camera = Rwc_augmented @ Jc
         
         Pct = Lt @ Jc_camera
+        Ptt = Lt @ np.block([[-Rwc.T, np.zeros((3,3))], [np.zeros((3,3)), np.zeros((3,3))]]) @ Jt
         pt  = np.array([xt/zt, yt/zt])
 
         xa, ya, za = pa_camera
@@ -239,8 +269,6 @@ class CollisionTaskNode(Node):
         Pcb = Lb @ Jc_camera
         pb  = np.array([xb/zb, yb/zb])
 
-        #Se l'end effector (o oggetto da trackare) ha profondità
-        #inferiore  dell'oggetto occludente non imponiamo nessun vincolo
         z_segment_avg = (za + zb) / 2
         if z_segment_avg >= zt:
             return None, None 
@@ -251,7 +279,7 @@ class CollisionTaskNode(Node):
 
         pb_dot = Pcb @ self.qdot_left 
         pa_dot = Pca @ self.qdot_left
-        pt_dot = Pct @ self.qdot_left
+        pt_dot = Pct @ self.qdot_left+Ptt @ self.qdot_right
 
         alpha_prime = tb * (pb - pa).T @ (pb_dot - pa_dot)
         beta_prime  = tb * ((pa - pt).T @ (pb_dot - pa_dot) +
@@ -264,8 +292,7 @@ class CollisionTaskNode(Node):
 
         sbar = self.evaluate_sbar(A, B, C)
         
-        # MODIFICA 2: Aggiunto un margine per garantire la repulsione statica in velocità
-        margin = 0.006
+        margin = 0.007
         g    = -(A*sbar**2 + B*sbar + C) + margin
 
         term1 = ((pb - pa).T @ (Pcb - Pca)) * (sbar**2)
@@ -274,7 +301,6 @@ class CollisionTaskNode(Node):
         term3 = (pa - pt).T @ (Pca - Pct)
         Ec    = tb * (term1 + term2 + term3)
 
-        # MODIFICA 3: Aggiunto il segno MENO a Rwc.T per la cinematica relativa del tool
         Ptt = Lt @ np.block([[-Rwc.T,           np.zeros((3,3))],
                             [np.zeros((3,3)), np.zeros((3,3))]]) @ Jt
         Et  = -tb * ((pb - pa) * sbar + (pa - pt)).T @ Ptt
@@ -303,16 +329,48 @@ class CollisionTaskNode(Node):
             sbar = 0.0 if C <= A + B + C else 1.0
         return sbar
 
+
+    def joy_callback(self, msg: Joy):
+        def axis(i: int) -> float:
+            """Legge un asse con deadzone applicata."""
+            v = msg.axes[i] if i < len(msg.axes) else 0.0
+            return v if abs(v) > self.joy_deadzone else 0.0
+
+        def btn(i: int) -> int:
+            return msg.buttons[i] if i < len(msg.buttons) else 0
+
+        cmd = np.zeros(6)
+
+        # Tasto A → stop immediato
+        if btn(0):
+                self._emergency_stop = True
+                self.right_twist_command = np.zeros(6)
+                self.get_logger().info("EMERGENCY STOP — entrambi i bracci fermi.")
+                return
+
+        # Traslazioni  (stick sinistro + D-pad)
+        cmd[0] =  axis(1) * self.linear_speed   # avanti/indietro
+        cmd[1] =  axis(0) * self.linear_speed   # sinistra/destra
+        cmd[2] =  axis(7) * self.linear_speed   # su/giù  (D-pad verticale)
+
+        # Rotazioni  (stick destro + bumpers)
+        cmd[3] =  axis(4) * self.angular_speed  # pitch
+        cmd[4] = -axis(3) * self.angular_speed  # yaw
+        cmd[5] = (btn(5) - btn(4)) * self.angular_speed  # RB+ / LB−  roll
+
+        self.right_twist_command = cmd
+
+
+
     def on_timer(self):
-        if self.q_left is None or self.qdot_left is None \
-                or self.q_right is None or self.qdot_right is None:
+        if self.q_left is None or self.qdot_left is None or self.q_right is None or self.qdot_right is None:
             self.get_logger().info('Waiting data...')
             return
 
         twist_msg_left  = Twist()
         twist_msg_right = Twist()
         
-        world_frame  = 'world'
+        world_frame  = 'base'
         link8_frame  = 'right_fr3_hand_tcp'
         camera_frame = 'left_fr3_camera_link_optical'
      
@@ -320,7 +378,6 @@ class CollisionTaskNode(Node):
             Tcl = self.tf_buffer.lookup_transform(camera_frame, link8_frame,  rclpy.time.Time())
             Twc = self.tf_buffer.lookup_transform(world_frame,  camera_frame, rclpy.time.Time())
         except TransformException as ex:
-            self.get_logger().info(f'Could not transform: {ex}')
             return
     
         x, y, z = (Tcl.transform.translation.x,
@@ -338,6 +395,8 @@ class CollisionTaskNode(Node):
         
         e = np.array([self.X, self.Y])
 
+        self.get_logger().info(f'error: [{self.X:.4f}, {self.Y:.4f}]')
+
         pin.computeJointJacobians(self.left_model, self.left_data, self.q_left)
         pin.updateFramePlacements(self.left_model, self.left_data)    
         J_left = pin.getFrameJacobian(self.left_model, self.left_data, 
@@ -349,11 +408,14 @@ class CollisionTaskNode(Node):
         J_right = pin.getFrameJacobian(self.right_model, self.right_data, 
                                       self.right_frame_id, 
                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
-        
-        # if np.linalg.norm(e) < 1e-3:
-        #     left_twist_command = np.zeros(6)
-        # else:
-        left_twist_command = -Rwc_augmented @ np.linalg.pinv(L) @ e
+
+       
+        if self._emergency_stop==True:  
+            left_twist_command = np.zeros(6) 
+        else:
+            left_twist_command= -Rwc_augmented @ np.linalg.pinv(L) @ e
+          
+
         LJl     = L @ Rwc_augmented @ J_left
         LJl_dag = np.linalg.pinv(LJl)
 
@@ -363,17 +425,15 @@ class CollisionTaskNode(Node):
         d_min_val = float(result[2])
 
         ql_nullspace = ((np.eye(7, dtype=np.int_) - LJl_dag @ LJl) @ DH_num).flatten()
-        ql_dot_des   = 1.2 * np.linalg.pinv(J_left) @ left_twist_command - 0.0 * ql_nullspace
-        
+        ql_dot_des   = 0.5 * np.linalg.pinv(J_left) @ left_twist_command - 0.056 * ql_nullspace
+
+        #  Braccio destro
         t = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
-        right_twist_command = np.array([
-            0.0 * math.cos(t),
-            0.0 * math.sin(t), 
-            0.0 * math.sin(t),
-            0.0,
-            0.0,
-            0.0
-        ])
+        if self._emergency_stop==True:  
+            right_twist_command=np.zeros(6)  
+        else:
+            right_twist_command = self.right_twist_command.copy()
+
         qr_dot_des = np.linalg.pinv(J_right) @ right_twist_command
 
         qdot_current = np.concatenate((self.qdot_left, self.qdot_right))
@@ -394,7 +454,7 @@ class CollisionTaskNode(Node):
             x0=qdot_current,
             args=(qd_desired,),
             method='SLSQP',
-            constraints=scipy_constraints           
+            #constraints=scipy_constraints           
         )
 
         if risultato.success:
@@ -425,6 +485,17 @@ class CollisionTaskNode(Node):
 
         self.left_publisher.publish(twist_msg_left)
         self.right_publisher.publish(twist_msg_right)
+        error_msg=Float32MultiArray()
+        error_msg.data=[self.X,self.Y]
+        
+        self.error_publisher.publish(error_msg)
+
+        H_msg=Float32()
+        H_msg.data=H_val
+
+        self.H_value_publisher.publish(H_msg)
+
+    
 
     def left_listener_callback(self, msg):
         name_to_pos = dict(zip(msg.name, msg.position))
@@ -442,6 +513,7 @@ class CollisionTaskNode(Node):
         pkg_path   = get_package_share_directory('franka_gazebo_bringup')
         xacro_file = os.path.join(pkg_path, 'urdf', 'franka_arm.gazebo.xacro')
 
+        #TO MODIFY FOR THE REAL ROBOTS
         if prefix == "right":
             xyz='-0.343 0.416 0'
             rpy='0 0 -1.570796'
@@ -458,6 +530,7 @@ class CollisionTaskNode(Node):
         })
         return doc
 
+
 def compute_interaction_matrix(x, y, z):
     xn, yn = x/z, y/z
     L = np.array([
@@ -465,6 +538,7 @@ def compute_interaction_matrix(x, y, z):
         [   0, -1/z,   yn/z,  1+yn**2,        -xn*yn,   -xn]
     ])
     return L
+
 
 def quaternion_to_rotation_matrix(q):
     x, y, z, w = q.x, q.y, q.z, q.w
@@ -474,12 +548,19 @@ def quaternion_to_rotation_matrix(q):
         [  2*(x*z-y*w),     2*(y*z+x*w), 1-2*(x**2+y**2)]
     ])
 
+
 def main(args=None):
     rclpy.init(args=args)
     node = CollisionTaskNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        print("\n[INFO] Shutdown richiesto.")
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
