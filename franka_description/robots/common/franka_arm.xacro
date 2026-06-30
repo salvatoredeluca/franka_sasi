@@ -157,7 +157,7 @@
 
     <link name="${prefix}link8"/>
 
-    <xacro:if value="${gazebo}">
+    <!-- <xacro:if value="${gazebo}"> -->
 
 
         <joint name="${prefix}link8_aligned_joint" type="fixed">
@@ -208,7 +208,7 @@
         <child link="${prefix}camera_link_optical"/>
       </joint>
     
-    </xacro:if>
+    <!-- </xacro:if> -->
 
 
 

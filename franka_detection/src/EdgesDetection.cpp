@@ -126,8 +126,8 @@ private:
         cv::cvtColor(rgb_image_, hsv, cv::COLOR_BGR2HSV);
 
        
-       cv::Scalar lower(85, 100, 50); //azzurro petrolio
-        cv::Scalar upper(110, 255, 255);
+        cv::Scalar lower(40, 50, 50);   // Limite inferiore per il verde
+        cv::Scalar upper(80, 255, 255); // Limite superiore per il verde
         
         cv::inRange(hsv, lower, upper, mask);
         //Toglie rumore
@@ -169,7 +169,7 @@ private:
                         float z = get_median_depth(depth_image_, center.x, center.y);
 
    
-                        RCLCPP_INFO(this->get_logger(), "Profondita al pixel [u:%d, v:%d] -> %f m", center.x, center.y, z);
+                        // RCLCPP_INFO(this->get_logger(), "Profondita al pixel [u:%d, v:%d] -> %f m", center.x, center.y, z);
 
                         auto deproject = [&](int u, int v, float depth) {
                                 geometry_msgs::msg::Point pt;

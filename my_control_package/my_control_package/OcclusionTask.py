@@ -36,7 +36,7 @@ class CollisionTaskNode(Node):
         self._emergency_stop = False
         
         self.joy_sub = self.create_subscription(
-        Joy, '/joy', self.joy_callback, 5
+        Joy, '/joy', self.joy_callback, qos_profile_sensor_data
         )
         self.joy_deadzone = 0.05
 
@@ -97,8 +97,8 @@ class CollisionTaskNode(Node):
         self.right_twist_command = np.zeros(6)
 
         # modulo della velocità
-        self.linear_speed = 0.05      # m/s
-        self.angular_speed = 0.10     # rad/s
+        self.linear_speed = 0.03    # m/s
+        self.angular_speed = 0.01     # rad/s
 
         self.Xt = None
         self.Yt = None
@@ -378,6 +378,7 @@ class CollisionTaskNode(Node):
             Tcl = self.tf_buffer.lookup_transform(camera_frame, link8_frame,  rclpy.time.Time())
             Twc = self.tf_buffer.lookup_transform(world_frame,  camera_frame, rclpy.time.Time())
         except TransformException as ex:
+            self.get_logger().warn(f'Errore TF: {ex}', throttle_duration_sec=2.0)
             return
     
         x, y, z = (Tcl.transform.translation.x,
@@ -410,10 +411,10 @@ class CollisionTaskNode(Node):
                                       pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
 
        
-        if self._emergency_stop==True:  
-            left_twist_command = np.zeros(6) 
-        else:
-            left_twist_command= -Rwc_augmented @ np.linalg.pinv(L) @ e
+        # if self._emergency_stop==True:  
+        #     left_twist_command = np.zeros(6) 
+        # else:
+        left_twist_command= -Rwc_augmented @ np.linalg.pinv(L) @ e
           
 
         LJl     = L @ Rwc_augmented @ J_left
@@ -425,7 +426,7 @@ class CollisionTaskNode(Node):
         d_min_val = float(result[2])
 
         ql_nullspace = ((np.eye(7, dtype=np.int_) - LJl_dag @ LJl) @ DH_num).flatten()
-        ql_dot_des   = 0.5 * np.linalg.pinv(J_left) @ left_twist_command - 0.056 * ql_nullspace
+        ql_dot_des   = 0.0 * np.linalg.pinv(J_left) @ left_twist_command - 0.0* ql_nullspace
 
         #  Braccio destro
         t = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
